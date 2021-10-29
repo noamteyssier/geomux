@@ -10,6 +10,8 @@ git clone https://github.com/noamteyssier/geomux
 cd geomux
 conda env create --file=env.yaml
 pip install -e .
+
+conda activate geomux
 ```
 
 # Usage
