@@ -60,3 +60,16 @@ geom.fit(frame)
 geom.predict()
 assignments = geom.assignments()
 ```
+
+## Expected Inputs
+The input format expected is a three column tab-separated table with the columns `barcode, guide, n_umi` that represent the cell barcode, the sgRNA (sequence or alias), and the number of unique molecular identifiers found for that barcode~sgRNA pair. 
+
+### Example
+```
+barcode guide n_umi
+TTTACTGCAGCAGGAT  TBL1XR1 1
+GGGTAGAGTGGGTCAA  PHF2    8
+AGCTCAAAGTAGTCTC  GNAI1   3
+GATCACAAGAGTTCGG  PPP5C   1
+TTGTTTGCAGAGGTAC 	KDM6B   6
+```
