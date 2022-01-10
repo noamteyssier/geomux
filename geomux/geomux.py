@@ -10,14 +10,12 @@ pio.templates.default = "plotly_white"
 
 class Geomux:
     
-    def __init__(self, min_umi=10, min_lor=1, scalar=0, n_jobs=4):
+    def __init__(self, min_umi=5, scalar=0, n_jobs=4):
         """
         param:
             min_umi: int: minimum number of UMIs to consider a cell barcode
-            min_lor: float: minimum LogOddsRatio to assign a barcode
         """
         self.min_umi = min_umi
-        self.min_lor = min_lor
         self.scalar = scalar
         self.n_jobs = n_jobs
         self.is_fit = False
@@ -26,6 +24,8 @@ class Geomux:
         self.param_M = None
         self.param_n = None
         self.param_N = None
+
+        self.num_tests = None
     
     def log_initial(self):
         """
@@ -35,7 +35,6 @@ class Geomux:
             f"""
             Fitting Model with Params:
                 min_umi: {self.min_umi}
-                min_lor: {self.min_lor}
                 scalar: {self.scalar}
                 n_jobs: {self.n_jobs}
             """,
@@ -125,8 +124,15 @@ class Geomux:
                 )
             )
         
-        pv_mat[pv_mat == 0] = pv_mat[pv_mat != 0].min()
-        return -np.log10(pv_mat)
+        pv_mat = np.clip(pv_mat, np.min(pv_mat[pv_mat != 0]), 1)
+        return pv_mat 
+
+    def adjusted_pvalues(self) -> np.ndarray:
+        """
+        calculate the adjusted p-values using a 
+        bonferonni correction
+        """
+        return np.clip(self.pv_mat * self.num_tests, 0, 1)
     
     def log_odds(self, matrix):
         """
@@ -157,13 +163,17 @@ class Geomux:
         # barcode IDs and guide IDs
         self.cells = matrix.index.values
         self.guides = matrix.columns.values
+
+        # assign number of tests
+        self.num_tests = self.cells.size * self.guides.size
         
         # hypergeometric testing
         self.parameterize_hypergeometric_distribution(matrix.values)
         self.pv_mat = self.hypergeometric_test(matrix.values)
+        self.adj_pv_mat = self.adjusted_pvalues()
         
         # calculate log odds
-        self.lor = self.log_odds(self.pv_mat)
+        self.lor = self.log_odds(-np.log(self.pv_mat))
         
         # matrix statistics
         self.n_umi = matrix.sum(axis=1)
@@ -173,7 +183,7 @@ class Geomux:
         
         self.is_fit = True
 
-    def predict(self):
+    def predict(self, min_lor = 0.5):
         """
         Assigns each cell barcode to its top guide if the LOR
         passes the provided threshold
@@ -181,12 +191,13 @@ class Geomux:
         if not self.is_fit:
             raise AttributeError("Model Must first be fit")
 
-        self.mask = self.lor > self.min_lor
+        self.mask = self.lor > min_lor
         self._assignments = pd.DataFrame({
             "barcode": self.cells[self.mask],
-            "guide": self.guides[self.pv_mat[self.mask].argmax(axis=1)],
+            "guide": self.guides[self.pv_mat[self.mask].argmin(axis=1)],
             "lor": self.lor[self.mask],
-            "pvalue": np.exp(-self.pv_mat[self.mask].max(axis=1)),
+            "pvalue": self.pv_mat[self.mask].min(axis=1),
+            "adj_pvalue": self.adj_pv_mat[self.mask].min(axis=1),
             "max_umi": self.max_umi[self.mask],
             "n_umi": self.n_umi[self.mask],
             "m_umi": self.m_umi[self.mask],
