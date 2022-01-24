@@ -18,11 +18,20 @@ jobs:
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
+
     - name: Install dependencies
       run: |
         conda env update --file env.yaml --name base
         pip install -e .
+
     - name: Test with pytest
       run: |
-        conda install pytest
-        pytest 
+        pytest -v
+
+    - name: Test table io from commandline
+      run: |
+        geomux -i tests/data/table.tab -o results_table.tab
+
+    - name: Test adat io from commandline
+      run: |
+        geomux -i tests/data/anndata.h5ad -o results_table.tab
