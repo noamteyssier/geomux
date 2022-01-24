@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="geomux",
-    version="0.2.0",
+    version="0.2.1",
     author="Noam Teysser",
     author_email="Noam.Teyssier@ucsf.edu",
     packages=["geomux"],
@@ -11,6 +11,7 @@ setup(
     install_requires=[
         "numpy",
         "pandas",
+        "anndata",
         "scipy",
         "plotly",
         "umap-learn"]
