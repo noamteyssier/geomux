@@ -1,6 +1,9 @@
 import sys
 import argparse
-from geomux import Geomux, read_table
+from geomux import (
+    Geomux, 
+    read_table, 
+    read_anndata)
 
 
 def get_args():
@@ -45,14 +48,18 @@ def get_args():
 
 def main_cli():
     args = get_args()
-    frame = read_table(args.input)
+
+    if args.input.endswith(".h5ad"):
+        frame = read_anndata(args.input)
+    else:
+        frame = read_table(args.input)
+
     geom = Geomux(
         min_umi=args.min_umi,
-        min_lor=args.min_lor,
         scalar=args.scalar,
         n_jobs=args.n_jobs)
     geom.fit(frame)
-    geom.predict()
+    geom.predict(min_lor=args.min_lor)
     assignments = geom.assignments()
 
     if not args.output:

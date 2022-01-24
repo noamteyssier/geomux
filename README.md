@@ -9,9 +9,9 @@ Uses a hypergeometric distribution to calculate the pvalue of observing the spec
 git clone https://github.com/noamteyssier/geomux
 cd geomux
 conda env create --file=env.yaml
-pip install -e .
-
 conda activate geomux
+
+pip install -e .
 ```
 
 # Usage
@@ -19,6 +19,7 @@ Geomux can be used either as a commandline tool or as a python module
 
 ## Commandline
 when pip installing, an executable will be placed in your conda bin path. So you can call it directly from wherever in your filesystem
+
 ### Usage
 ```bash
 # example usage
@@ -61,15 +62,30 @@ geom.predict()
 assignments = geom.assignments()
 ```
 
-## Expected Inputs
+# Expected Inputs
 The input format expected is a three column tab-separated table with the columns `barcode, guide, n_umi` that represent the cell barcode, the sgRNA (sequence or alias), and the number of unique molecular identifiers found for that barcode~sgRNA pair. 
 
-### Example
-```
-barcode guide n_umi
+## Tab-Separated Input
+A provided input could be a 3 column table (with no header) where the values are [barcode, guide, n_umi]
+```csv
 TTTACTGCAGCAGGAT  TBL1XR1 1
 GGGTAGAGTGGGTCAA  PHF2    8
 AGCTCAAAGTAGTCTC  GNAI1   3
 GATCACAAGAGTTCGG  PPP5C   1
 TTGTTTGCAGAGGTAC  KDM6B   6
 ```
+
+## AnnData Input
+Another input format that is accepted is a .h5ad object where the observations are barcodes and the variables are guides.
+The .X attribute should represent a cell x target matrix of umi counts. 
+
+## Example In Memory Input
+```python3
+import pandas as pd
+table = pd.DataFrame({
+  "barcode": ["TTTT", "CCAC", "ACCA"],
+  "target": ["sgRNA1", "sgRNA2", "sgRNA1"],
+  "n_umi": [1, 3, 2]
+})
+```
+
