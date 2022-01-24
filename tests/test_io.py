@@ -10,11 +10,13 @@ np.random.seed(42)
 N = 50
 M = 5
 
+
 def gen_seq(n) -> str:
     """
     creates a random sequence of size `n`
     """
     return ''.join(np.random.choice(["A", "C", "T", "G"], size=n))
+
 
 def create_table():
     """
@@ -25,6 +27,7 @@ def create_table():
     table["barcode"] = [gen_seq(16) for _ in range(N)]
     table = table.melt(id_vars="barcode")
     table.to_csv("tests/data/table.tab", sep="\t", index=False, header=False)
+
 
 def create_anndata():
     """
