@@ -3,10 +3,6 @@ from multiprocessing import Pool
 import numpy as np
 import pandas as pd
 from scipy.stats import hypergeom
-from umap import UMAP
-import plotly.express as px
-import plotly.io as pio
-pio.templates.default = "plotly_white"
 
 class Geomux:
     
