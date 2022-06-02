@@ -8,10 +8,10 @@ Uses a hypergeometric distribution to calculate the pvalue of observing the spec
 ```bash
 git clone https://github.com/noamteyssier/geomux
 cd geomux
-conda env create --file=env.yaml
-conda activate geomux
-
 pip install -e .
+
+# or if you're using the UMAP visualization functionality
+pip install -e .[umap]
 ```
 
 # Usage
