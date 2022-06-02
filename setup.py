@@ -13,6 +13,7 @@ setup(
         "pandas",
         "anndata",
         "scipy",
-        "plotly",
-        "umap-learn"]
+        "matplotlib"],
+    extras_require={
+        "umap": ["umap-learn"]}
 )
