@@ -2,7 +2,7 @@
 from multiprocessing import Pool
 from typing import List
 import numpy as np
-# import pandas as pd
+import pandas as pd
 from scipy.stats import hypergeom
 from scipy.special import logit
 from adjustpy import adjust
@@ -38,6 +38,7 @@ class Geomux:
         self.n_jobs = n_jobs
         self.verbose = verbose
         self.method = method
+        self._n_total = matrix.shape[0]
 
         self._set_procedure()
         self._filter_matrix()
@@ -64,7 +65,7 @@ class Geomux:
         self.passing_cells = cell_sums >= self.min_umi
         self.matrix = self.matrix[self.passing_cells]
         if self.verbose:
-            old_size = cell_sums.shape[0]
+            old_size = self._n_total
             new_size = self.matrix.shape[0]
             print(
                 "Removed {} ({:.2f}%) cells with < {} UMIs".format(
@@ -142,7 +143,7 @@ class Geomux:
         if not self.is_fit:
             AttributeError("Please run `.test()` method first")
         self.labels = [
-            tuple(np.flatnonzero(self.pv_mat[i] < threshold))
+            np.flatnonzero(self.pv_mat[i] < threshold)
             for i in np.arange(self._n_cells)
         ]
         return self.labels
@@ -155,6 +156,40 @@ class Geomux:
             AttributeError("Please run `.test()` method first")
         self.classification = np.sum(self.pv_mat < threshold, axis=1)
         return self.classification
+
+    def single_assignments(self, threshold=0.05):
+        """
+        Returns a dataframe for all assignments with single significance
+        """
+        frame = pd.DataFrame({
+            "cell_id": np.arange(self._n_total)[self.passing_cells],
+            "assignment": [i[0] if len(i) > 0 else "" for i in self.predict(threshold)]
+        })
+        frame = frame.iloc[self.classify(threshold) == 1]
+        return frame
+
+    def assignments(self, threshold=0.05):
+        """
+        Returns a dataframe for all assignments with significance
+        """
+        frame = pd.DataFrame({
+            "cell_id": np.arange(self._n_total)[self.passing_cells],
+            "assignment": self.predict(threshold),
+            "moi": self.classify(threshold),
+            "p_value": self.draws,
+            "log_odds": self.pv_mat.min(axis=1),
+            "tested": True,
+            })
+        null = pd.DataFrame({
+            "cell_id": np.arange(self._n_total)[~self.passing_cells],
+            "assignment": [np.array([]) for _ in np.arange(np.sum(~self.passing_cells))],
+            "moi": np.nan,
+            "p_value": np.nan,
+            "log_odds": np.nan,
+            "tested": False,
+            })
+        return pd.concat([frame, null]).sort_values('cell_id')
+
 
 # class Geomux:
 #     def __init__(self, min_umi=5, scalar=0, n_jobs=4):
