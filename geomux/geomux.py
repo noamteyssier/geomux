@@ -157,17 +157,6 @@ class Geomux:
         self.classification = np.sum(self.pv_mat < threshold, axis=1)
         return self.classification
 
-    def single_assignments(self, threshold=0.05):
-        """
-        Returns a dataframe for all assignments with single significance
-        """
-        frame = pd.DataFrame({
-            "cell_id": np.arange(self._n_total)[self.passing_cells],
-            "assignment": [i[0] if len(i) > 0 else "" for i in self.predict(threshold)]
-        })
-        frame = frame.iloc[self.classify(threshold) == 1]
-        return frame
-
     def assignments(self, threshold=0.05):
         """
         Returns a dataframe for all assignments with significance
