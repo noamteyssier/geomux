@@ -136,9 +136,9 @@ class Geomux:
         self.is_fit = True
         return self.pv_mat
 
-    def predict(self, threshold=0.05) -> List:
+    def _calc_assignments(self, threshold=0.05) -> List:
         """
-        Predict significant assignments
+        Predict significant assignments for each cell
         """
         if not self.is_fit:
             AttributeError("Please run `.test()` method first")
@@ -148,7 +148,7 @@ class Geomux:
         ]
         return self.labels
 
-    def classify(self, threshold=0.05):
+    def _calc_moi(self, threshold=0.05):
         """
         Classify each cell between single, double, or null assignments
         """
@@ -163,16 +163,18 @@ class Geomux:
         """
         frame = pd.DataFrame({
             "cell_id": np.arange(self._n_total)[self.passing_cells],
-            "assignment": self.predict(threshold),
-            "moi": self.classify(threshold),
-            "p_value": self.draws,
-            "log_odds": self.pv_mat.min(axis=1),
+            "assignment": self._calc_assignments(threshold),
+            "moi": self._calc_moi(threshold),
+            "n_umi": self.draws,
+            "p_value": self.pv_mat.min(axis=1),
+            "log_odds": self.log_odds,
             "tested": True,
             })
         null = pd.DataFrame({
             "cell_id": np.arange(self._n_total)[~self.passing_cells],
             "assignment": [np.array([]) for _ in np.arange(np.sum(~self.passing_cells))],
             "moi": np.nan,
+            "n_umi": np.nan,
             "p_value": np.nan,
             "log_odds": np.nan,
             "tested": False,
