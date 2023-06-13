@@ -13,6 +13,6 @@ setup(
         "pandas",
         "anndata",
         "scipy",
-        "plotly",
-        "umap-learn"]
+        "adjustpy",
+    ]
 )
