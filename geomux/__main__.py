@@ -66,10 +66,6 @@ def main_cli():
     else:
         matrix = read_table(args.input)
 
-    print(matrix)
-    print(matrix.index.values)
-    print(matrix.columns.values)
-
     if args.correction not in ["bh", "bonferroni", "by"]:
         raise ValueError("Correction method must be one of: bh, bonferroni, by")
 
