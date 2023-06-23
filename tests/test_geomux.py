@@ -9,6 +9,7 @@ def sample_barcode(b_size):
     """
     return "".join(np.random.choice(["A", "C", "T", "G"], size=b_size))
 
+
 def generate_matrix(n, b_size, g_size):
     frame = pd.DataFrame(
         {
@@ -17,7 +18,9 @@ def generate_matrix(n, b_size, g_size):
             "n_umi": [np.random.choice(100) for _ in np.arange(n)],
         }
     )
-    matrix = frame.pivot_table(index="barcode", columns="guide", values="n_umi").fillna(0)
+    matrix = frame.pivot_table(index="barcode", columns="guide", values="n_umi").fillna(
+        0
+    )
     return matrix
 
 
