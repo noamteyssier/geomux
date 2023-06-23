@@ -25,7 +25,7 @@ when pip installing, an executable will be placed in your bin path. So you can c
 
 ```bash
 # example usage
-geomux -i <input.tab / input.h5ad> -o <output.tab>
+geomux -i <input.tab / input.h5ad> -o <output.tsv>
 ```
 
 You can also run the help flag to see the help menu for parameter options.
