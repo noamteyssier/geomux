@@ -1,5 +1,5 @@
 from multiprocessing import Pool
-from typing import List, Union
+from typing import List, Union, Optional
 import numpy as np
 import pandas as pd
 from scipy.stats import hypergeom
@@ -11,6 +11,8 @@ class Geomux:
     def __init__(
         self,
         matrix: Union[np.ndarray, pd.DataFrame],
+        cell_names: Optional[Union[List[str], np.ndarray]] = None,
+        guide_names: Optional[Union[List[str], np.ndarray]] = None,
         min_umi: int = 5,
         n_jobs: int = 4,
         verbose: bool = False,
@@ -28,9 +30,29 @@ class Geomux:
         method: str
             pvalue adjustment procedure to use.
         """
+
+        # Load the matrix
         if isinstance(matrix, pd.DataFrame):
             matrix = matrix.values
         self.matrix = matrix
+        
+        # Load the cell and guide names
+        if cell_names is None:
+            cell_names = np.arange(matrix.shape[0])
+        else:
+            assert len(cell_names) == matrix.shape[0]
+            cell_names = np.array(cell_names)
+
+        if guide_names is None:
+            guide_names = np.arange(matrix.shape[1])
+        else:
+            assert len(guide_names) == matrix.shape[1]
+            guide_names = np.array(guide_names)
+
+        self.cell_names = cell_names
+        self.guide_names = guide_names
+
+        # Set the parameters
         self.min_umi = min_umi
         self.n_jobs = n_jobs
         self.verbose = verbose
@@ -144,7 +166,7 @@ class Geomux:
         if not self.is_fit:
             AttributeError("Please run `.test()` method first")
         self.labels = [
-            np.flatnonzero(self.pv_mat[i] < threshold) for i in np.arange(self._n_cells)
+            self.guide_names[np.flatnonzero(self.pv_mat[i] < threshold)] for i in np.arange(self._n_cells)
         ]
         return self.labels
 
@@ -161,20 +183,27 @@ class Geomux:
         """
         Returns a dataframe for all assignments with significance
         """
+        cell_id_in = np.arange(self._n_total)[self.passing_cells]
+        cell_id_out = np.arange(self._n_total)[~self.passing_cells]
+
+        cell_name_in = self.cell_names[self.passing_cells]
+        cell_name_out = self.cell_names[~self.passing_cells]
+
         frame = pd.DataFrame(
             {
-                "cell_id": np.arange(self._n_total)[self.passing_cells],
+                "cell_id": cell_name_in,
                 "assignment": self._calc_assignments(threshold),
                 "moi": self._calc_moi(threshold),
                 "n_umi": self.draws,
                 "p_value": self.pv_mat.min(axis=1),
                 "log_odds": self.log_odds,
                 "tested": True,
-            }
+            },
+            index=cell_id_in,
         )
         null = pd.DataFrame(
             {
-                "cell_id": np.arange(self._n_total)[~self.passing_cells],
+                "cell_id": cell_name_out,
                 "assignment": [
                     np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
                 ],
@@ -183,6 +212,7 @@ class Geomux:
                 "p_value": np.nan,
                 "log_odds": np.nan,
                 "tested": False,
-            }
+            },
+            index=cell_id_out,
         )
-        return pd.concat([frame, null]).sort_values("cell_id")
+        return pd.concat([frame, null]).sort_index()
