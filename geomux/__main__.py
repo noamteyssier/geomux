@@ -1,47 +1,59 @@
 import sys
 import argparse
-from geomux import (
-    Geomux, 
-    read_table, 
-    read_anndata)
+from geomux import Geomux, read_table, read_anndata
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-i", "--input",
-        type=str,
-        required=True,
-        help="Input table to assign")
+        "-i", "--input", type=str, required=True, help="Input table to assign"
+    )
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=str,
         required=False,
-        help="output table of barcode assignments (default=stdout)")
+        help="output table of barcode assignments (default=stdout)",
+    )
     parser.add_argument(
-        "-u", "--min_umi",
+        "-u",
+        "--min_umi",
         type=int,
         required=False,
         default=5,
-        help="minimum number of UMIs to consider a cell (default=5)")
+        help="minimum number of UMIs to consider a cell (default=5)",
+    )
     parser.add_argument(
-        "-l", "--min_lor",
+        "-t",
+        "--threshold",
         type=float,
         required=False,
-        default=1.0,
-        help="Log2 odds ratio threshold (default=1.0)")
+        default=0.05,
+        help="Pvalue threshold to use after pvalue correction (default=0.05)",
+    )
     parser.add_argument(
-        "-s", "--scalar",
+        "-c",
+        "--correction",
+        type=str,
+        required=False,
+        default="bh",
+        help="Pvalue correction method to use (default=bh)",
+    )
+    parser.add_argument(
+        "-j",
+        "--n_jobs",
         type=int,
         required=False,
         default=1,
-        help="scalar to use to avoid zeroes in log2 odds ratio calculation (default=0)")
+        help="Number of jobs to use when calculating hypergeometric distributions (default=1)",
+    )
     parser.add_argument(
-        "-j", "--n_jobs",
-        type=int,
+        "-q",
+        "--quiet",
+        action="store_true",
         required=False,
-        default=1,
-        help="Number of jobs to use when calculating hypergeometric distributions (default=1)")
+        help="Suppress progress messages",
+    )
     args = parser.parse_args()
     return args
 
@@ -50,21 +62,26 @@ def main_cli():
     args = get_args()
 
     if args.input.endswith(".h5ad"):
-        frame = read_anndata(args.input)
+        matrix = read_anndata(args.input)
     else:
-        frame = read_table(args.input)
+        matrix = read_table(args.input)
 
-    geom = Geomux(
+    if args.correction not in ["bh", "bonferroni", "by"]:
+        raise ValueError("Correction method must be one of: bh, bonferroni, by")
+
+    gx = Geomux(
+        matrix,
+        cell_names=matrix.index.values,
+        guide_names=matrix.columns.values,
         min_umi=args.min_umi,
-        scalar=args.scalar,
-        n_jobs=args.n_jobs)
-    geom.fit(frame)
-    geom.predict(min_lor=args.min_lor)
-    assignments = geom.assignments()
+        n_jobs=args.n_jobs,
+        method=args.correction,
+        verbose=not args.quiet,
+    )
+    gx.test()
+    assignments = gx.assignments(threshold=args.threshold)
 
     if not args.output:
         assignments.to_csv(sys.stdout, sep="\t", index=False)
     else:
         assignments.to_csv(args.output, sep="\t", index=False)
-
-

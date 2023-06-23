@@ -2,36 +2,40 @@
 
 A tool that assigns guides to cell barcodes. 
 
-Uses a hypergeometric distribution to calculate the pvalue of observing the specific count of a guide for each guide in each barcode. Then it calculates the log odds ratio between the most significant and second most significant pvalue which measures the ratio of observing a doublet (double infection). Then a threshold is applied and the cells that pass are assigned the guide of their most significant expression
+Uses a hypergeometric distribution to calculate the pvalue of observing the
+specific count of a guide for each guide in each barcode.
+This can be used to calculate the MOI of the cell and assigned guides for each cell.
+The resulting dataframe can then be used to intersect with your original data
+to assign every cell to a barcode and allows you to filter
+for the MOI you're interested in working with.
 
-# Installation
+## Installation
+
 ```bash
-git clone https://github.com/noamteyssier/geomux
-cd geomux
-conda env create --file=env.yaml
-conda activate geomux
-
-pip install -e .
+pip install git+https://github.com/noamteyssier/geomux
 ```
 
-# Usage
+## Usage
+
 Geomux can be used either as a commandline tool or as a python module
 
-## Commandline
-when pip installing, an executable will be placed in your conda bin path. So you can call it directly from wherever in your filesystem
+### Commandline
 
-### Usage
+when pip installing, an executable will be placed in your bin path. So you can call it directly from wherever in your filesystem
+
 ```bash
 # example usage
-geomux -i <input.tab> -o <output.tab>
+geomux -i <input.tab / input.h5ad> -o <output.tsv>
 ```
-### Help Menu
+
+You can also run the help flag to see the help menu for parameter options.
+
 ```txt
 $ geomux --help
 
-usage: geomux [-h] -i INPUT [-o OUTPUT] [-u MIN_UMI] [-l MIN_LOR] [-s SCALAR] [-j N_JOBS]
+usage: geomux [-h] -i INPUT [-o OUTPUT] [-u MIN_UMI] [-t THRESHOLD] [-c CORRECTION] [-j N_JOBS] [-q]
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -i INPUT, --input INPUT
                         Input table to assign
@@ -39,53 +43,69 @@ optional arguments:
                         output table of barcode assignments (default=stdout)
   -u MIN_UMI, --min_umi MIN_UMI
                         minimum number of UMIs to consider a cell (default=5)
-  -l MIN_LOR, --min_lor MIN_LOR
-                        Log2 odds ratio threshold (default=1.0)
-  -s SCALAR, --scalar SCALAR
-                        scalar to use to avoid zeroes in log2 odds ratio calculation (default=0)
+  -t THRESHOLD, --threshold THRESHOLD
+                        Pvalue threshold to use after pvalue correction (default=0.05)
+  -c CORRECTION, --correction CORRECTION
+                        Pvalue correction method to use (default=bh)
   -j N_JOBS, --n_jobs N_JOBS
                         Number of jobs to use when calculating hypergeometric distributions (default=1)
+  -q, --quiet           Suppress progress messages
 ```
 
-## Python Module
-You can check out the example notebook in `example/GeomuxJup.ipynb` but briefly:
+### Python Module
+
+#### Processing a 3-column TSV of [barcode, guide, n_umi]
 
 ```python
 from geomux import Geomux, read_table
 
-input = "filename.tab"
+input = "filename.tsv"
 
-frame = read_table(input)
-geom = Geomux()
-geom.fit(frame)
-geom.predict()
-assignments = geom.assignments()
+matrix = read_table(input)
+gx = Geomux(
+    matrix,
+    cell_names=matrix.index.values,
+    guide_names=matrix.columns.values,
+)
+gx.test()
+assignments = gx.assignments()
 ```
 
-# Expected Inputs
-The input format expected is a three column tab-separated table with the columns `barcode, guide, n_umi` that represent the cell barcode, the sgRNA (sequence or alias), and the number of unique molecular identifiers found for that barcode~sgRNA pair. 
+#### Processing an h5ad file format
 
-## Tab-Separated Input
-A provided input could be a 3 column table (with no header) where the values are [barcode, guide, n_umi]
-```csv
-TTTACTGCAGCAGGAT  TBL1XR1 1
-GGGTAGAGTGGGTCAA  PHF2    8
-AGCTCAAAGTAGTCTC  GNAI1   3
-GATCACAAGAGTTCGG  PPP5C   1
-TTGTTTGCAGAGGTAC  KDM6B   6
+```python
+from geomux import Geomux, read_anndata
+
+input = "filename.h5ad"
+
+matrix = read_anndata(input)
+gx = Geomux(
+    matrix,
+    cell_names=matrix.index.values,
+    guide_names=matrix.columns.values,
+)
+gx.test()
+assignments = gx.assignments
 ```
 
-## AnnData Input
-Another input format that is accepted is a .h5ad object where the observations are barcodes and the variables are guides.
-The .X attribute should represent a cell x target matrix of umi counts. 
+## Outputs
 
-## Example In Memory Input
-```python3
-import pandas as pd
-table = pd.DataFrame({
-  "barcode": ["TTTT", "CCAC", "ACCA"],
-  "target": ["sgRNA1", "sgRNA2", "sgRNA1"],
-  "n_umi": [1, 3, 2]
-})
-```
+The results of `geomux` will be an assignment dataframe that has as many
+observations as there are input cells.
 
+The columns of this dataframe will include:
+
+- cell_id
+    - The name of the cell provided or the index.
+- assignment
+    - A list representing all significant guides within that cell.
+- moi
+    - The number of significant guides within the cell.
+- n_umi
+    - The number of UMIs observed in the cell.
+- p_value
+    - The adjusted p-value of the hypergeometric test for that cell/guide test.
+- log_odds
+    - The log odds of observing the highest scoring guide compared to the second highest.
+- tested
+    - A bool flag representing whether the cell was included in the test (or `False` if it was filtered for low UMI counts)
