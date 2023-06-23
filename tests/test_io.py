@@ -48,6 +48,7 @@ def test_table():
     assert matrix.index.size == N
     assert matrix.columns.size == M
 
+
 def test_anndata():
     """
     loads an arbitrary anndata table
