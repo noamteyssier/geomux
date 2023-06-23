@@ -1,6 +1,7 @@
 from multiprocessing import Pool
 from typing import List, Union, Optional
 import numpy as np
+from numpy.typing import ArrayLike
 import pandas as pd
 from scipy.stats import hypergeom
 from scipy.special import logit
@@ -11,8 +12,8 @@ class Geomux:
     def __init__(
         self,
         matrix: Union[np.ndarray, pd.DataFrame],
-        cell_names: Optional[Union[List[str], np.ndarray]] = None,
-        guide_names: Optional[Union[List[str], np.ndarray]] = None,
+        cell_names: Optional[Union[List[str], np.ndarray, ArrayLike]] = None,
+        guide_names: Optional[Union[List[str], np.ndarray, ArrayLike]] = None,
         min_umi: int = 5,
         n_jobs: int = 4,
         verbose: bool = False,
