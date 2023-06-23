@@ -1,4 +1,3 @@
-# import sys
 from multiprocessing import Pool
 from typing import List, Union
 import numpy as np
