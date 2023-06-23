@@ -1,6 +1,6 @@
 # import sys
 from multiprocessing import Pool
-from typing import List
+from typing import List, Union
 import numpy as np
 import pandas as pd
 from scipy.stats import hypergeom
@@ -11,7 +11,7 @@ from adjustpy import adjust
 class Geomux:
     def __init__(
         self,
-        matrix: np.ndarray,
+        matrix: Union[np.ndarray, pd.DataFrame],
         min_umi: int = 5,
         n_jobs: int = 4,
         verbose: bool = False,
@@ -29,6 +29,8 @@ class Geomux:
         method: str
             pvalue adjustment procedure to use.
         """
+        if isinstance(matrix, pd.DataFrame):
+            matrix = matrix.values
         self.matrix = matrix
         self.min_umi = min_umi
         self.n_jobs = n_jobs
