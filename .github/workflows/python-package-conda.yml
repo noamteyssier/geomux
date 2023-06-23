@@ -31,8 +31,8 @@ jobs:
 
     - name: Test table io from commandline
       run: |
-        geomux -i tests/data/table.tab -o results_table.tab
+        geomux -i example/example.tsv.gz -o results_table.tab
 
     - name: Test adat io from commandline
       run: |
-        geomux -i tests/data/anndata.h5ad -o results_table.tab
+        geomux -i example/example.h5ad -o results_table.tab
