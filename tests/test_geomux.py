@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from geomux import Geomux
+from muxsim import MuxSim
 
 
 def sample_barcode(b_size):
@@ -36,3 +37,26 @@ def test_geomux():
     gx.test()
     assignments = gx.assignments()
     assert assignments.shape[0] == n
+
+def test_assignments():
+    """
+    tests assignments with easy data
+    """
+    num_cells = 1000
+    num_guides = 100
+    ms = MuxSim(
+        num_cells=num_cells,
+        num_guides=num_guides,
+        n=20,
+    )
+    gen = ms.sample()
+    gx = Geomux(gen)
+    gx.test()
+    assignments = gx.assignments()
+    guide_assignments = assignments.assignment.apply(lambda x: max(x) if len(x) > 0 else -1).max()
+    assert assignments.shape[0] == num_cells
+    assert guide_assignments <= num_guides
+    assert assignments.moi.min() >= 0
+    assert (assignments.moi == 0).sum() > 0
+    assert (assignments.moi == 1).sum() > 0
+    assert (assignments.moi == 2).sum() > 0
