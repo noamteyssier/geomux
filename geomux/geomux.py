@@ -7,15 +7,16 @@ from scipy.stats import hypergeom
 from scipy.special import logit
 from adjustpy import adjust
 
+
 class Geomux:
     def __init__(
-            self, 
-            matrix: np.ndarray, 
-            min_umi: int = 5, 
-            n_jobs: int = 4,
-            verbose: bool = False,
-            method: str = "bh",
-        ):
+        self,
+        matrix: np.ndarray,
+        min_umi: int = 5,
+        n_jobs: int = 4,
+        verbose: bool = False,
+        method: str = "bh",
+    ):
         """
         Parameters
         ----------
@@ -49,7 +50,9 @@ class Geomux:
     def _set_procedure(self):
         allowed_procedures = ["bonferroni", "bh", "by"]
         if self.method not in allowed_procedures:
-            raise ValueError(f"Provided method {self.method} not recognized. Choose from {', '.join(allowed_procedures)}")
+            raise ValueError(
+                f"Provided method {self.method} not recognized. Choose from {', '.join(allowed_procedures)}"
+            )
 
     def _filter_matrix(self):
         """
@@ -64,10 +67,11 @@ class Geomux:
             new_size = self.matrix.shape[0]
             print(
                 "Removed {} ({:.2f}%) cells with < {} UMIs".format(
-                    old_size - new_size, 
-                    100 * (old_size - new_size) / old_size, 
-                    self.min_umi
-            ))
+                    old_size - new_size,
+                    100 * (old_size - new_size) / old_size,
+                    self.min_umi,
+                )
+            )
 
     def _fit_parameters(self):
         """
@@ -121,8 +125,9 @@ class Geomux:
         with Pool(self.n_jobs) as p:
             pv_mat = np.vstack(
                 p.starmap(
-                    self._hypergeometric_test, 
-                    zip(self.matrix, np.arange(self._n_cells)))
+                    self._hypergeometric_test,
+                    zip(self.matrix, np.arange(self._n_cells)),
+                )
             )
 
         pv_mat = np.clip(pv_mat, np.min(pv_mat[pv_mat != 0]), 1)
@@ -138,8 +143,7 @@ class Geomux:
         if not self.is_fit:
             AttributeError("Please run `.test()` method first")
         self.labels = [
-            np.flatnonzero(self.pv_mat[i] < threshold)
-            for i in np.arange(self._n_cells)
+            np.flatnonzero(self.pv_mat[i] < threshold) for i in np.arange(self._n_cells)
         ]
         return self.labels
 
@@ -156,22 +160,28 @@ class Geomux:
         """
         Returns a dataframe for all assignments with significance
         """
-        frame = pd.DataFrame({
-            "cell_id": np.arange(self._n_total)[self.passing_cells],
-            "assignment": self._calc_assignments(threshold),
-            "moi": self._calc_moi(threshold),
-            "n_umi": self.draws,
-            "p_value": self.pv_mat.min(axis=1),
-            "log_odds": self.log_odds,
-            "tested": True,
-            })
-        null = pd.DataFrame({
-            "cell_id": np.arange(self._n_total)[~self.passing_cells],
-            "assignment": [np.array([]) for _ in np.arange(np.sum(~self.passing_cells))],
-            "moi": np.nan,
-            "n_umi": np.nan,
-            "p_value": np.nan,
-            "log_odds": np.nan,
-            "tested": False,
-            })
-        return pd.concat([frame, null]).sort_values('cell_id')
+        frame = pd.DataFrame(
+            {
+                "cell_id": np.arange(self._n_total)[self.passing_cells],
+                "assignment": self._calc_assignments(threshold),
+                "moi": self._calc_moi(threshold),
+                "n_umi": self.draws,
+                "p_value": self.pv_mat.min(axis=1),
+                "log_odds": self.log_odds,
+                "tested": True,
+            }
+        )
+        null = pd.DataFrame(
+            {
+                "cell_id": np.arange(self._n_total)[~self.passing_cells],
+                "assignment": [
+                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
+                ],
+                "moi": np.nan,
+                "n_umi": np.nan,
+                "p_value": np.nan,
+                "log_odds": np.nan,
+                "tested": False,
+            }
+        )
+        return pd.concat([frame, null]).sort_values("cell_id")
