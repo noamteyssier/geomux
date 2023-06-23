@@ -35,7 +35,7 @@ class Geomux:
         if isinstance(matrix, pd.DataFrame):
             matrix = matrix.values
         self.matrix = matrix
-        
+
         # Load the cell and guide names
         if cell_names is None:
             cell_names = np.arange(matrix.shape[0])
@@ -166,7 +166,8 @@ class Geomux:
         if not self.is_fit:
             AttributeError("Please run `.test()` method first")
         self.labels = [
-            self.guide_names[np.flatnonzero(self.pv_mat[i] < threshold)] for i in np.arange(self._n_cells)
+            self.guide_names[np.flatnonzero(self.pv_mat[i] < threshold)]
+            for i in np.arange(self._n_cells)
         ]
         return self.labels
 
