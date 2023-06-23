@@ -43,18 +43,17 @@ def test_table():
     loads an arbitrary table
     """
     create_table()
-    table = read_table("tests/data/table.tab")
-    assert table.shape == (N * M, 3)
-    assert table.barcode.unique().size == N
-    assert table.guide.unique().size == M
-
+    matrix = read_table("tests/data/table.tab")
+    assert matrix.shape == (N, M)
+    assert matrix.index.size == N
+    assert matrix.columns.size == M
 
 def test_anndata():
     """
     loads an arbitrary anndata table
     """
     create_anndata()
-    table = read_anndata("tests/data/anndata.h5ad")
-    assert table.shape == (N * M, 3)
-    assert table.barcode.unique().size == N
-    assert table.guide.unique().size == M
+    matrix = read_anndata("tests/data/anndata.h5ad")
+    assert matrix.shape == (N, M)
+    assert matrix.index.size == N
+    assert matrix.columns.size == M

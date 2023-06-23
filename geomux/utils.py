@@ -28,7 +28,7 @@ def read_anndata(filename: str) -> pd.DataFrame:
     """
     adata = ad.read(filename)
     matrix = pd.DataFrame(
-        adata.X.todense(),
+        np.array(adata.X),
         index=adata.obs.index.values,
         columns=adata.var.index.values,
     )
