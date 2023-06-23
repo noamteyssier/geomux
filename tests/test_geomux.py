@@ -38,6 +38,7 @@ def test_geomux():
     assignments = gx.assignments()
     assert assignments.shape[0] == n
 
+
 def test_assignments():
     """
     tests assignments with easy data
@@ -53,7 +54,9 @@ def test_assignments():
     gx = Geomux(gen)
     gx.test()
     assignments = gx.assignments()
-    guide_assignments = assignments.assignment.apply(lambda x: max(x) if len(x) > 0 else -1).max()
+    guide_assignments = assignments.assignment.apply(
+        lambda x: max(x) if len(x) > 0 else -1
+    ).max()
     assert assignments.shape[0] == num_cells
     assert guide_assignments <= num_guides
     assert assignments.moi.min() >= 0
