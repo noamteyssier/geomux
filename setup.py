@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="geomux",
-    version="0.2.1",
+    version="0.2.2",
     author="Noam Teysser",
     author_email="Noam.Teyssier@ucsf.edu",
     packages=["geomux"],
