@@ -1,3 +1,4 @@
+import scipy
 import numpy as np
 import pandas as pd
 import anndata as ad
@@ -27,8 +28,12 @@ def read_anndata(filename: str) -> pd.DataFrame:
     confirms that the file is in an expected format
     """
     adata = ad.read(filename)
+    if isinstance(adata.X, scipy.sparse._csr.csr_matrix):
+        mat = adata.X.todense()
+    else:
+        mat = adata.X
     matrix = pd.DataFrame(
-        np.array(adata.X),
+        mat,
         index=adata.obs.index.values,
         columns=adata.var.index.values,
     )
