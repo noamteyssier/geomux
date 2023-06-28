@@ -12,7 +12,7 @@ for the MOI you're interested in working with.
 ## Installation
 
 ```bash
-pip install git+https://github.com/noamteyssier/geomux
+pip install geomux
 ```
 
 ## Usage
