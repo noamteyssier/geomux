@@ -109,3 +109,26 @@ def test_geomux_all_guides_filtered():
         assert False
     except ValueError:
         pass
+
+def test_geomux_correct_assignment():
+    """
+    tests that the correct assignment is made for certain cases
+    """
+    num_cells = 1000
+    num_guides = 100
+    ms = MuxSim(
+        num_cells=num_cells,
+        num_guides=num_guides,
+        n=20,
+    )
+    gen = ms.sample()
+    gen[:, :3] = 0
+    gx = Geomux(gen, min_cells=5)
+    gx.test()
+    assignments = gx.assignments()
+    
+    for exp, obs in zip(ms.assignments, assignments.assignment):
+        if 3 in exp:
+            assert 3 in obs
+        elif 4 in exp:
+            assert 4 in obs
