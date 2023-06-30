@@ -15,6 +15,7 @@ class Geomux:
         cell_names: Optional[Union[List[str], np.ndarray, ArrayLike]] = None,
         guide_names: Optional[Union[List[str], np.ndarray, ArrayLike]] = None,
         min_umi: int = 5,
+        min_cells: int = 100,
         n_jobs: int = 4,
         verbose: bool = False,
         method: str = "bh",
@@ -26,6 +27,8 @@ class Geomux:
             matrix of cell x guide counts
         min_umi : int
             minimum number of UMIs to consider a cell barcode
+        min_cells : int
+            minimum number of cells to consider a guide
         n_jobs : int
             number of jobs to use for multiprocessing
         method: str
@@ -55,10 +58,12 @@ class Geomux:
 
         # Set the parameters
         self.min_umi = min_umi
+        self.min_cells = min_cells
         self.n_jobs = n_jobs
         self.verbose = verbose
         self.method = method
         self._n_total = matrix.shape[0]
+        self._m_total = matrix.shape[1]
 
         self._set_procedure()
         self._filter_matrix()
@@ -84,17 +89,69 @@ class Geomux:
         `min_umi` UMIs
         """
         cell_sums = self.matrix.sum(axis=1)
+        guide_sums = self.matrix.sum(axis=0)
         self.passing_cells = cell_sums >= self.min_umi
-        self.matrix = self.matrix[self.passing_cells]
+        self.passing_guides = guide_sums >= self.min_cells
+        self.matrix = self.matrix[self.passing_cells][:, self.passing_guides]
         if self.verbose:
-            old_size = self._n_total
-            new_size = self.matrix.shape[0]
+            print("---------------------------------------")
             print(
-                "Removed {} ({:.2f}%) cells with < {} UMIs".format(
-                    old_size - new_size,
-                    100 * (old_size - new_size) / old_size,
+                "INFO: Average number of UMIs per cell: {:.2f}".format(
+                    cell_sums.mean()
+                )
+            )
+            print(
+                "INFO: Variance of UMIs per cell: {:.2f}".format(
+                    cell_sums.var()
+                )
+            )
+            print(
+                "INFO: Cell UMI counts range from {} to {}".format(
+                    cell_sums.min(), cell_sums.max())
+            )
+            print("---------------------------------------")
+
+            print(
+                "INFO: Average number of cells per guide: {:.2f}".format(
+                    guide_sums.mean()
+                )
+            )
+            print(
+                "INFO: Variance of cells per guide: {:.2f}".format(
+                    guide_sums.var()
+                )
+            )
+            print(
+                "INFO: Guide cell counts range from {} to {}".format(
+                    guide_sums.min(), guide_sums.max())
+            )
+            print("---------------------------------------")
+            old_cell_size = self._n_total
+            new_cell_size = self.matrix.shape[0]
+            print(
+                "LOG: Removed {} ({:.2f}%) cells with < {} UMIs".format(
+                    old_cell_size - new_cell_size,
+                    100 * (old_cell_size - new_cell_size) / old_cell_size,
                     self.min_umi,
                 )
+            )
+
+            old_guide_size = self._m_total
+            new_guide_size = self.matrix.shape[1]
+            print(
+                "LOG: Removed {} ({:.2f}%) guides with < {} Cells".format(
+                    old_guide_size - new_guide_size,
+                    100 * (old_guide_size - new_guide_size) / old_guide_size,
+                    self.min_cells,
+                )
+            )
+        if self.matrix.shape[0] == 0:
+            raise ValueError(
+                "No cells passed the UMI threshold. Try lowering the min_umi parameter"
+            )
+        if self.matrix.shape[1] == 0:
+            raise ValueError(
+                "No guides passed the cell threshold. Try lowering the min_cells parameter"
             )
 
     def _fit_parameters(self):
@@ -166,8 +223,10 @@ class Geomux:
         """
         if not self.is_fit:
             AttributeError("Please run `.test()` method first")
+        guide_indices = np.arange(self._m_total)
+        guide_mask = guide_indices[self.passing_guides]
         self.labels = [
-            self.guide_names[np.flatnonzero(self.pv_mat[i] < threshold)]
+            self.guide_names[guide_mask[np.flatnonzero(self.pv_mat[i] < threshold)]]
             for i in np.arange(self._n_cells)
         ]
         return self.labels
