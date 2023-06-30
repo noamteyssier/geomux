@@ -37,7 +37,6 @@ def test_geomux():
     gx.test()
     assignments = gx.assignments()
     assert assignments.shape[0] == n
-    
 
 
 def test_assignments():
@@ -88,6 +87,7 @@ def test_geomux_min_cells():
         for i in [0, 1, 2]:
             assert i not in a
 
+
 def test_geomux_all_cells_filtered():
     """
     tests conditions where all cells are filtered
@@ -99,6 +99,7 @@ def test_geomux_all_cells_filtered():
     except ValueError:
         pass
 
+
 def test_geomux_all_guides_filtered():
     """
     tests conditions where all guides are filtered
@@ -109,6 +110,7 @@ def test_geomux_all_guides_filtered():
         assert False
     except ValueError:
         pass
+
 
 def test_geomux_correct_assignment():
     """
@@ -126,7 +128,7 @@ def test_geomux_correct_assignment():
     gx = Geomux(gen, min_cells=5)
     gx.test()
     assignments = gx.assignments()
-    
+
     for exp, obs in zip(ms.assignments, assignments.assignment):
         if 3 in exp:
             assert 3 in obs

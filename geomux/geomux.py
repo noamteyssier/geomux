@@ -96,18 +96,13 @@ class Geomux:
         if self.verbose:
             print("---------------------------------------")
             print(
-                "INFO: Average number of UMIs per cell: {:.2f}".format(
-                    cell_sums.mean()
-                )
+                "INFO: Average number of UMIs per cell: {:.2f}".format(cell_sums.mean())
             )
-            print(
-                "INFO: Variance of UMIs per cell: {:.2f}".format(
-                    cell_sums.var()
-                )
-            )
+            print("INFO: Variance of UMIs per cell: {:.2f}".format(cell_sums.var()))
             print(
                 "INFO: Cell UMI counts range from {} to {}".format(
-                    cell_sums.min(), cell_sums.max())
+                    cell_sums.min(), cell_sums.max()
+                )
             )
             print("---------------------------------------")
 
@@ -116,14 +111,11 @@ class Geomux:
                     guide_sums.mean()
                 )
             )
-            print(
-                "INFO: Variance of cells per guide: {:.2f}".format(
-                    guide_sums.var()
-                )
-            )
+            print("INFO: Variance of cells per guide: {:.2f}".format(guide_sums.var()))
             print(
                 "INFO: Guide cell counts range from {} to {}".format(
-                    guide_sums.min(), guide_sums.max())
+                    guide_sums.min(), guide_sums.max()
+                )
             )
             print("---------------------------------------")
             old_cell_size = self._n_total
