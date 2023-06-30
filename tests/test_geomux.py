@@ -87,3 +87,25 @@ def test_geomux_min_cells():
     for a in assignments.assignment:
         for i in [0, 1, 2]:
             assert i not in a
+
+def test_geomux_all_cells_filtered():
+    """
+    tests conditions where all cells are filtered
+    """
+    gen = np.zeros((100, 100))
+    try:
+        gx = Geomux(gen, min_umi=5)
+        assert False
+    except ValueError:
+        pass
+
+def test_geomux_all_guides_filtered():
+    """
+    tests conditions where all guides are filtered
+    """
+    gen = np.ones((100, 100))
+    try:
+        gx = Geomux(gen, min_cells=101)
+        assert False
+    except ValueError:
+        pass
