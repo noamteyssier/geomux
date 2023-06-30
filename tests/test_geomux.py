@@ -33,7 +33,7 @@ def test_geomux():
     b_size = 10
     g_size = 4
     matrix = generate_matrix(n, b_size, g_size)
-    gx = Geomux(matrix)
+    gx = Geomux(matrix, min_cells=1)
     gx.test()
     assignments = gx.assignments()
     assert assignments.shape[0] == n
@@ -63,3 +63,74 @@ def test_assignments():
     assert (assignments.moi == 0).sum() > 0
     assert (assignments.moi == 1).sum() > 0
     assert (assignments.moi == 2).sum() > 0
+
+
+def test_geomux_min_cells():
+    """
+    tests min_cells
+    """
+    num_cells = 1000
+    num_guides = 100
+    ms = MuxSim(
+        num_cells=num_cells,
+        num_guides=num_guides,
+        n=20,
+    )
+    gen = ms.sample()
+    gen[:, :3] = 0
+    gx = Geomux(gen, min_cells=5)
+    gx.test()
+    assignments = gx.assignments()
+    num_guides = np.sum(gen.sum(axis=0) >= 5)
+    assert gx._n_guides == num_guides
+    for a in assignments.assignment:
+        for i in [0, 1, 2]:
+            assert i not in a
+
+
+def test_geomux_all_cells_filtered():
+    """
+    tests conditions where all cells are filtered
+    """
+    gen = np.zeros((100, 100))
+    try:
+        gx = Geomux(gen, min_umi=5)
+        assert False
+    except ValueError:
+        pass
+
+
+def test_geomux_all_guides_filtered():
+    """
+    tests conditions where all guides are filtered
+    """
+    gen = np.ones((100, 100))
+    try:
+        gx = Geomux(gen, min_cells=101)
+        assert False
+    except ValueError:
+        pass
+
+
+def test_geomux_correct_assignment():
+    """
+    tests that the correct assignment is made for certain cases
+    """
+    num_cells = 1000
+    num_guides = 100
+    ms = MuxSim(
+        num_cells=num_cells,
+        num_guides=num_guides,
+        n=20,
+    )
+    gen = ms.sample()
+    gen[:, :3] = 0
+    gx = Geomux(gen, min_cells=5)
+    gx.test()
+    assignments = gx.assignments()
+
+    for exp, obs in zip(ms.assignments, assignments.assignment):
+        if 3 in exp:
+            assert 3 in obs
+        elif 4 in exp:
+            assert 4 in obs

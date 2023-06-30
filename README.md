@@ -43,9 +43,11 @@ options:
                         output table of barcode assignments (default=stdout)
   -u MIN_UMI, --min_umi MIN_UMI
                         minimum number of UMIs to consider a cell (default=5)
+  -c MIN_CELLS, --min_cells MIN_CELLS
+                        minimum number of cells to consider a guide (default=100)
   -t THRESHOLD, --threshold THRESHOLD
                         Pvalue threshold to use after pvalue correction (default=0.05)
-  -c CORRECTION, --correction CORRECTION
+  -C CORRECTION, --correction CORRECTION
                         Pvalue correction method to use (default=bh)
   -j N_JOBS, --n_jobs N_JOBS
                         Number of jobs to use when calculating hypergeometric distributions (default=1)

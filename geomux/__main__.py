@@ -24,6 +24,14 @@ def get_args():
         help="minimum number of UMIs to consider a cell (default=5)",
     )
     parser.add_argument(
+        "-c",
+        "--min_cells",
+        type=int,
+        required=False,
+        default=100,
+        help="minimum number of cells to consider a guide (default=100)",
+    )
+    parser.add_argument(
         "-t",
         "--threshold",
         type=float,
@@ -32,7 +40,7 @@ def get_args():
         help="Pvalue threshold to use after pvalue correction (default=0.05)",
     )
     parser.add_argument(
-        "-c",
+        "-C",
         "--correction",
         type=str,
         required=False,
@@ -74,6 +82,7 @@ def main_cli():
         cell_names=matrix.index.values,
         guide_names=matrix.columns.values,
         min_umi=args.min_umi,
+        min_cells=args.min_cells,
         n_jobs=args.n_jobs,
         method=args.correction,
         verbose=not args.quiet,
