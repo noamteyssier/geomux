@@ -33,10 +33,11 @@ def test_geomux():
     b_size = 10
     g_size = 4
     matrix = generate_matrix(n, b_size, g_size)
-    gx = Geomux(matrix)
+    gx = Geomux(matrix, min_cells=1)
     gx.test()
     assignments = gx.assignments()
     assert assignments.shape[0] == n
+    
 
 
 def test_assignments():
@@ -63,3 +64,26 @@ def test_assignments():
     assert (assignments.moi == 0).sum() > 0
     assert (assignments.moi == 1).sum() > 0
     assert (assignments.moi == 2).sum() > 0
+
+
+def test_geomux_min_cells():
+    """
+    tests min_cells
+    """
+    num_cells = 1000
+    num_guides = 100
+    ms = MuxSim(
+        num_cells=num_cells,
+        num_guides=num_guides,
+        n=20,
+    )
+    gen = ms.sample()
+    gen[:, :3] = 0
+    gx = Geomux(gen, min_cells=5)
+    gx.test()
+    assignments = gx.assignments()
+    num_guides = np.sum(gen.sum(axis=0) >= 5)
+    assert gx._n_guides == num_guides
+    for a in assignments.assignment:
+        for i in [0, 1, 2]:
+            assert i not in a
