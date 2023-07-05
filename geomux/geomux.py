@@ -221,6 +221,14 @@ class Geomux:
             self.guide_names[guide_mask[np.flatnonzero(self.pv_mat[i] < threshold)]]
             for i in np.arange(self._n_cells)
         ]
+        self.counts = [
+            self.matrix[i][np.flatnonzero(self.pv_mat[i] < threshold)]
+            for i in np.arange(self._n_cells)
+        ]
+        self.pvalues = [
+            self.pv_mat[i][np.flatnonzero(self.pv_mat[i] < threshold)]
+            for i in np.arange(self._n_cells)
+        ]
         return self.labels
 
     def _calc_moi(self, threshold=0.05):
@@ -242,13 +250,18 @@ class Geomux:
         cell_name_in = self.cell_names[self.passing_cells]
         cell_name_out = self.cell_names[~self.passing_cells]
 
+        self._calc_assignments(threshold)
+
         frame = pd.DataFrame(
             {
                 "cell_id": cell_name_in,
-                "assignment": self._calc_assignments(threshold),
+                "assignment": self.labels,
+                "counts": self.counts,
+                "pvalues": self.pvalues,
                 "moi": self._calc_moi(threshold),
                 "n_umi": self.draws,
-                "p_value": self.pv_mat.min(axis=1),
+                "min_pvalue": self.pv_mat.min(axis=1),
+                "max_count": self.matrix.max(axis=1),
                 "log_odds": self.log_odds,
                 "tested": True,
             },
@@ -260,9 +273,16 @@ class Geomux:
                 "assignment": [
                     np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
                 ],
+                "counts": [
+                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
+                ],
+                "pvalues": [
+                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
+                ],
                 "moi": np.nan,
                 "n_umi": np.nan,
-                "p_value": np.nan,
+                "min_pvalue": np.nan,
+                "max_count": np.nan,
                 "log_odds": np.nan,
                 "tested": False,
             },
