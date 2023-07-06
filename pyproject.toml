@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "geomux"
+version = "0.2.6"
+description = "A tool to assign identifiers to cell barcodes"
+authors = ["Noam Teyssier"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.scripts]
+geomux = 'geomux.__main__:main_cli'
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.13"
+numpy = "^1.25.0"
+pandas = "^2.0.3"
+anndata = "^0.9.1"
+scipy = "^1.11.1"
+adjustpy = "^0.1.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+muxsim = "^0.1.0"
+black = "^23.3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
