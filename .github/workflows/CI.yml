@@ -1,0 +1,81 @@
+name: Python Package using Conda
+
+on: [push]
+
+jobs:
+
+  ci:
+    needs: [ostest, full-ci]
+    name: CI
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: Done
+        run: exit 0
+
+  full-ci:
+    runs-on: 'ubuntu-latest'
+    strategy:
+      max-parallel: 5
+      matrix:
+        python-version: [ "3.9", "3.10", "3.11" ]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install poetry
+        run: |
+          pip install poetry
+
+      - name: Install project
+        run: |
+          poetry install
+
+      - name: Test with pytest
+        run: |
+          poetry run pytest -v
+
+      - name: Test table io from commandline
+        run: |
+          poetry run geomux -i example/example.tsv.gz -o results_table.tab
+
+      - name: Test adat io from commandline
+        run: |
+          poetry run geomux -i example/example.h5ad -o results_table.tab
+
+  ostest:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      max-parallel: 5
+      matrix:
+        os: [ "windows-latest", "macos-latest" ]
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+
+    - name: Install poetry
+      run: |
+        pip install poetry
+
+    - name: Install project
+      run: |
+        poetry install
+
+    - name: Test with pytest
+      run: |
+        poetry run pytest -v
+
+    - name: Test table io from commandline
+      run: |
+        poetry run geomux -i example/example.tsv.gz -o results_table.tab
+
+    - name: Test adat io from commandline
+      run: |
+        poetry run geomux -i example/example.h5ad -o results_table.tab
