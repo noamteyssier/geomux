@@ -19,18 +19,22 @@ jobs:
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
 
-    - name: Install development dependencies and project
+    - name: Install poetry
       run: |
-        pip install -e ."[dev]"
+        pip install poetry
+
+    - name: Install project
+      run: |
+        pip install poetry
 
     - name: Test with pytest
       run: |
-        pytest -v
+        poetry run pytest -v
 
     - name: Test table io from commandline
       run: |
-        geomux -i example/example.tsv.gz -o results_table.tab
+        poetry run geomux -i example/example.tsv.gz -o results_table.tab
 
     - name: Test adat io from commandline
       run: |
-        geomux -i example/example.h5ad -o results_table.tab
+        poetry run geomux -i example/example.h5ad -o results_table.tab
