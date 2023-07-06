@@ -3,12 +3,22 @@ name: Python Package using Conda
 on: [push]
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
+
+  ci:
+    needs: [ostest]
+    name: CI
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: Done
+        run: exit 0
+
+  ostest:
+    runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 5
       matrix:
-        python-version: ["3.9", "3.10", "3.11"]
+        os: [ "ubuntu-latest", "windows-latest", "macos-latest" ]
+        python-version: [ "3.9", "3.10", "3.11" ]
 
     steps:
     - uses: actions/checkout@v3
