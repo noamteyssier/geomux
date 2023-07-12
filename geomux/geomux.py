@@ -202,6 +202,17 @@ class Geomux:
         """
         calculates log-odds of each significant guide compared to the next
         most insignificant guide
+
+        This is done in a dynamic pattern, where the most significant guide
+        is compared to the next-most insignificant guide. If the log-odds
+        is greater than the threshold, the guide is kept. Otherwise, the
+        guide is removed from the assignment matrix and it will be included
+        in the next comparison.
+
+        Parameters
+        ----------
+        lor_threshold : float
+            log-odds threshold for guide inclusion (LOR must be greater than this)
         """
         if not self._is_assigned:
             raise AttributeError("Must assign guides first")
@@ -211,12 +222,26 @@ class Geomux:
 
         # calculate the log odds for each cell
         for i in np.arange(self._n_cells):
+
+            # select the significant guides
             sig_idx = np.flatnonzero(self._assignment_matrix[i])
-            sig_idx = sig_idx[np.argsort(self.pv_mat[i, sig_idx])]
+
+            # Sort the indices by pvalue (descending)
+            sort_idx = np.argsort(self.pv_mat[i, sig_idx])[::-1]
+
+            # sort the significant guides by pvalue (descending)
+            sig_idx = sig_idx[sort_idx]
 
             for j in sig_idx:
+
+                # find the next most significant insignificant guide
                 min_insig = self.pv_mat[i][~self._assignment_matrix[i]].min()
+
+                # calculate the log odds
                 lor = logit(min_insig) - logit(self.pv_mat[i, j])
+
+                # if the log odds is greater than the threshold, keep the guide
+                # otherwise, remove the guide from the assignment matrix
                 if lor > lor_threshold:
                     self.lor_matrix[i, j] = lor
                 else:
