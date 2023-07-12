@@ -222,7 +222,6 @@ class Geomux:
 
         # calculate the log odds for each cell
         for i in np.arange(self._n_cells):
-
             # select the significant guides
             sig_idx = np.flatnonzero(self._assignment_matrix[i])
 
@@ -233,7 +232,6 @@ class Geomux:
             sig_idx = sig_idx[sort_idx]
 
             for j in sig_idx:
-
                 # find the next most significant insignificant guide
                 min_insig = self.pv_mat[i][~self._assignment_matrix[i]].min()
 
