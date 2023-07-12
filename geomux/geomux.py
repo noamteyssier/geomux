@@ -211,7 +211,6 @@ class Geomux:
 
         # calculate the log odds for each cell
         for i in np.arange(self._n_cells):
-
             sig_idx = np.flatnonzero(self._assignment_matrix[i])
             sig_idx = sig_idx[np.argsort(self.pv_mat[i, sig_idx])]
 
@@ -358,12 +357,9 @@ class Geomux:
         )
         return pd.concat([frame, null]).sort_index()
 
-
     def assignments(
-            self, 
-            pvalue_threshold: float = 0.05, 
-            lor_threshold: float = 10.0
-        ) -> pd.DataFrame:
+        self, pvalue_threshold: float = 0.05, lor_threshold: float = 10.0
+    ) -> pd.DataFrame:
         """
         Returns a dataframe for all assignments with significance thresholds
 
@@ -376,4 +372,3 @@ class Geomux:
         """
         self._filter_significant(pvalue_threshold, lor_threshold)
         return self._assemble_dataframe()
-
