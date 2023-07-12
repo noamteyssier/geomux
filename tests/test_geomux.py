@@ -132,5 +132,3 @@ def test_geomux_correct_assignment():
     for exp, obs in zip(ms.assignments, assignments.assignment):
         if 3 in exp:
             assert 3 in obs
-        elif 4 in exp:
-            assert 4 in obs

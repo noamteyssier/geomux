@@ -33,11 +33,19 @@ def get_args():
     )
     parser.add_argument(
         "-t",
-        "--threshold",
+        "--pvalue_threshold",
         type=float,
         required=False,
         default=0.05,
         help="Pvalue threshold to use after pvalue correction (default=0.05)",
+    )
+    parser.add_argument(
+        "-T",
+        "--lor_threshold",
+        type=float,
+        required=False,
+        default=10.0,
+        help="Log odds ratio threshold to use (default=10.0)",
     )
     parser.add_argument(
         "-C",
@@ -88,7 +96,10 @@ def main_cli():
         verbose=not args.quiet,
     )
     gx.test()
-    assignments = gx.assignments(threshold=args.threshold)
+    assignments = gx.assignments(
+        pvalue_threshold=args.pvalue_threshold,
+        lor_threshold=args.lor_threshold,
+    )
 
     if not args.output:
         assignments.to_csv(sys.stdout, sep="\t", index=False)

@@ -176,21 +176,6 @@ class Geomux:
         adj_pvalues = np.clip(adj_pvalues, np.min(adj_pvalues[adj_pvalues != 0]), 1)
         return adj_pvalues.reshape(pvalues.shape)
 
-    def _log_odds(self):
-        """
-        calculates log odds as the ratio between the majority
-        and second majority guide in a cell.
-
-        In the case of negative-log pvalues this will calculate
-        the log odds ratio between the observed significance
-        """
-        lor = np.zeros(self._n_cells)
-        for i in np.arange(self._n_cells):
-            maj_idx, min_idx = np.argsort(self.pv_mat[i])[:2]
-            maj_val, min_val = self.pv_mat[i][[min_idx, maj_idx]]
-            lor[i] = logit(maj_val) - logit(min_val)
-        return lor
-
     def test(self):
         """
         Performs cell x guide geometric testing
@@ -205,44 +190,148 @@ class Geomux:
 
         pv_mat = np.clip(pv_mat, np.min(pv_mat[pv_mat != 0]), 1)
         self.pv_mat = self._adjust_pvalues(pv_mat)
-        self.log_odds = self._log_odds()
         self.is_fit = True
-        return self.pv_mat
 
-    def _calc_assignments(self, threshold=0.05) -> List:
-        """
-        Predict significant assignments for each cell
-        """
+    def _generate_assignments(self, threshold=0.05):
         if not self.is_fit:
             AttributeError("Please run `.test()` method first")
+        self._assignment_matrix = self.pv_mat < threshold
+        self._is_assigned = True
+
+    def _calculate_log_odds(self, lor_threshold: float):
+        """
+        calculates log-odds of each significant guide compared to the next
+        most insignificant guide
+
+        This is done in a dynamic pattern, where the most significant guide
+        is compared to the next-most insignificant guide. If the log-odds
+        is greater than the threshold, the guide is kept. Otherwise, the
+        guide is removed from the assignment matrix and it will be included
+        in the next comparison.
+
+        Parameters
+        ----------
+        lor_threshold : float
+            log-odds threshold for guide inclusion (LOR must be greater than this)
+        """
+        if not self._is_assigned:
+            raise AttributeError("Must assign guides first")
+
+        # instantiate the log odds matrix
+        self.lor_matrix = np.zeros((self._n_cells, self._n_guides))
+
+        # calculate the log odds for each cell
+        for i in np.arange(self._n_cells):
+            # select the significant guides
+            sig_idx = np.flatnonzero(self._assignment_matrix[i])
+
+            # Sort the indices by pvalue (descending)
+            sort_idx = np.argsort(self.pv_mat[i, sig_idx])[::-1]
+
+            # sort the significant guides by pvalue (descending)
+            sig_idx = sig_idx[sort_idx]
+
+            for j in sig_idx:
+                # find the next most significant insignificant guide
+                min_insig = self.pv_mat[i][~self._assignment_matrix[i]].min()
+
+                # calculate the log odds
+                lor = logit(min_insig) - logit(self.pv_mat[i, j])
+
+                # if the log odds is greater than the threshold, keep the guide
+                # otherwise, remove the guide from the assignment matrix
+                if lor > lor_threshold:
+                    self.lor_matrix[i, j] = lor
+                else:
+                    self._assignment_matrix[i, j] = False
+
+        self._is_lor_calculated = True
+
+    def _generate_labels(self):
+        if not self._is_assigned:
+            raise AttributeError("Must assign guides first")
+        if not self._is_lor_calculated:
+            raise AttributeError("Must calculate log odds first")
+
         guide_indices = np.arange(self._m_total)
         guide_mask = guide_indices[self.passing_guides]
         self.labels = [
-            self.guide_names[guide_mask[np.flatnonzero(self.pv_mat[i] < threshold)]]
+            self.guide_names[guide_mask[np.flatnonzero(self._assignment_matrix[i])]]
             for i in np.arange(self._n_cells)
         ]
+
+    def _select_counts(self):
+        if not self._is_assigned:
+            raise AttributeError("Must assign guides first")
+        if not self._is_lor_calculated:
+            raise AttributeError("Must calculate log odds first")
+
         self.counts = [
-            self.matrix[i][np.flatnonzero(self.pv_mat[i] < threshold)]
+            self.matrix[i][np.flatnonzero(self._assignment_matrix[i])]
             for i in np.arange(self._n_cells)
         ]
+
+    def _select_pvalues(self):
+        if not self._is_assigned:
+            raise AttributeError("Must assign guides first")
+        if not self._is_lor_calculated:
+            raise AttributeError("Must calculate log odds first")
+
         self.pvalues = [
-            self.pv_mat[i][np.flatnonzero(self.pv_mat[i] < threshold)]
+            self.pv_mat[i][np.flatnonzero(self._assignment_matrix[i])]
             for i in np.arange(self._n_cells)
         ]
-        return self.labels
 
-    def _calc_moi(self, threshold=0.05):
-        """
-        Classify each cell between single, double, or null assignments
-        """
-        if not self.is_fit:
-            AttributeError("Please run `.test()` method first")
-        self.classification = np.sum(self.pv_mat < threshold, axis=1)
-        return self.classification
+    def _select_log_odds(self):
+        if not self._is_assigned:
+            raise AttributeError("Must assign guides first")
+        if not self._is_lor_calculated:
+            raise AttributeError("Must calculate log odds first")
 
-    def assignments(self, threshold=0.05):
+        self.log_odds = [
+            self.lor_matrix[i][np.flatnonzero(self._assignment_matrix[i])]
+            for i in np.arange(self._n_cells)
+        ]
+
+    def _calculate_moi(self):
+        if not self._is_assigned:
+            raise AttributeError("Must assign guides first")
+        if not self._is_lor_calculated:
+            raise AttributeError("Must calculate log odds first")
+
+        self.moi = np.sum(self._assignment_matrix, axis=1)
+
+    def _filter_significant(
+        self,
+        pvalue_threshold: float = 0.05,
+        lor_threshold: float = 10.0,
+    ):
         """
-        Returns a dataframe for all assignments with significance
+        Calculates the MOI for each cell
+
+        Parameters
+        ----------
+        pvalue_threshold : float
+            pvalue threshold for significance (used on the adjusted pvalues)
+        lor_threshold : float
+            log odds ratio threshold for significance
+        """
+        self._generate_assignments(pvalue_threshold)
+        self._calculate_log_odds(lor_threshold)
+        self._generate_labels()
+        self._select_counts()
+        self._select_pvalues()
+        self._select_log_odds()
+        self._calculate_moi()
+
+    def _assemble_dataframe(self):
+        """
+        Assemble the assignment results into a dataframe
+
+        Returns
+        -------
+        df : pd.DataFrame
+            dataframe with assignment results and calculated metrics
         """
         cell_id_in = np.arange(self._n_total)[self.passing_cells]
         cell_id_out = np.arange(self._n_total)[~self.passing_cells]
@@ -250,19 +339,17 @@ class Geomux:
         cell_name_in = self.cell_names[self.passing_cells]
         cell_name_out = self.cell_names[~self.passing_cells]
 
-        self._calc_assignments(threshold)
-
         frame = pd.DataFrame(
             {
                 "cell_id": cell_name_in,
                 "assignment": self.labels,
                 "counts": self.counts,
                 "pvalues": self.pvalues,
-                "moi": self._calc_moi(threshold),
+                "log_odds": self.log_odds,
+                "moi": self.moi,
                 "n_umi": self.draws,
                 "min_pvalue": self.pv_mat.min(axis=1),
                 "max_count": self.matrix.max(axis=1),
-                "log_odds": self.log_odds,
                 "tested": True,
             },
             index=cell_id_in,
@@ -279,6 +366,9 @@ class Geomux:
                 "pvalues": [
                     np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
                 ],
+                "log_odds": [
+                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
+                ],
                 "moi": np.nan,
                 "n_umi": np.nan,
                 "min_pvalue": np.nan,
@@ -289,3 +379,19 @@ class Geomux:
             index=cell_id_out,
         )
         return pd.concat([frame, null]).sort_index()
+
+    def assignments(
+        self, pvalue_threshold: float = 0.05, lor_threshold: float = 10.0
+    ) -> pd.DataFrame:
+        """
+        Returns a dataframe for all assignments with significance thresholds
+
+        Parameters
+        ----------
+        pvalue_threshold : float
+            pvalue threshold for significance (used on the adjusted pvalues)
+        lor_threshold : float
+            log odds ratio threshold for significance
+        """
+        self._filter_significant(pvalue_threshold, lor_threshold)
+        return self._assemble_dataframe()
