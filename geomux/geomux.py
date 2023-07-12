@@ -176,21 +176,6 @@ class Geomux:
         adj_pvalues = np.clip(adj_pvalues, np.min(adj_pvalues[adj_pvalues != 0]), 1)
         return adj_pvalues.reshape(pvalues.shape)
 
-    def _log_odds(self):
-        """
-        calculates log odds as the ratio between the majority
-        and second majority guide in a cell.
-
-        In the case of negative-log pvalues this will calculate
-        the log odds ratio between the observed significance
-        """
-        lor = np.zeros(self._n_cells)
-        for i in np.arange(self._n_cells):
-            maj_idx, min_idx = np.argsort(self.pv_mat[i])[:2]
-            maj_val, min_val = self.pv_mat[i][[min_idx, maj_idx]]
-            lor[i] = logit(maj_val) - logit(min_val)
-        return lor
-
     def test(self):
         """
         Performs cell x guide geometric testing
@@ -250,19 +235,17 @@ class Geomux:
         cell_name_in = self.cell_names[self.passing_cells]
         cell_name_out = self.cell_names[~self.passing_cells]
 
-        self._calc_assignments(threshold)
-
         frame = pd.DataFrame(
             {
                 "cell_id": cell_name_in,
                 "assignment": self.labels,
                 "counts": self.counts,
                 "pvalues": self.pvalues,
-                "moi": self._calc_moi(threshold),
+                "log_odds": self.log_odds,
+                "moi": self.moi,
                 "n_umi": self.draws,
                 "min_pvalue": self.pv_mat.min(axis=1),
                 "max_count": self.matrix.max(axis=1),
-                "log_odds": self.log_odds,
                 "tested": True,
             },
             index=cell_id_in,
@@ -289,3 +272,23 @@ class Geomux:
             index=cell_id_out,
         )
         return pd.concat([frame, null]).sort_index()
+
+
+    def assignments(
+            self, 
+            pvalue_threshold: float = 0.05, 
+            lor_threshold: float = 10.0
+        ) -> pd.DataFrame:
+        """
+        Returns a dataframe for all assignments with significance thresholds
+
+        Parameters
+        ----------
+        pvalue_threshold : float
+            pvalue threshold for significance (used on the adjusted pvalues)
+        lor_threshold : float
+            log odds ratio threshold for significance
+        """
+        self._filter_significant(pvalue_threshold, lor_threshold)
+        return self._assemble_dataframe()
+
