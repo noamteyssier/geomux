@@ -97,6 +97,7 @@ class Geomux:
         self.matrix = self.matrix[self.passing_cells][:, self.passing_guides]
 
         logging.info(f"Filtered matrix shape: {self.matrix.shape}")
+        logging.info("")
 
         logging.info("--- Summary statistics ---")
         logging.info(f"Average number of UMIs per cell: {cell_sums.mean():.2f}")
@@ -110,6 +111,7 @@ class Geomux:
         logging.info(
             f"Guide cell counts range from {guide_sums.min()} to {guide_sums.max()}"
         )
+        logging.info("")
 
         old_cell_size = self._n_total
         new_cell_size = self.matrix.shape[0]
@@ -132,6 +134,7 @@ class Geomux:
                 self.min_cells,
             )
         )
+        logging.info("")
 
         if self.matrix.shape[0] == 0:
             raise ValueError(
@@ -184,11 +187,13 @@ class Geomux:
                     zip(self.matrix, np.arange(self._n_cells)),
                 )
             )
+        logging.info("")
 
         pv_mat = np.clip(pv_mat, np.min(pv_mat[pv_mat != 0]), 1)
 
         logging.info("--- P-value Adjustment ---")
         self.pv_mat = self._adjust_pvalues(pv_mat)
+        logging.info("")
 
         self.is_fit = True
 
@@ -201,6 +206,7 @@ class Geomux:
 
         self._n_assigned = np.sum(self._assignment_matrix.sum(axis=1) > 0)
         logging.info(f"{self._n_assigned} cells assigned to guides")
+        logging.info("")
 
         self._is_assigned = True
 
@@ -255,6 +261,7 @@ class Geomux:
 
         self._n_assigned = np.sum(self._assignment_matrix.sum(axis=1) > 0)
         logging.info(f"{self._n_assigned} cells assigned to guides")
+        logging.info("")
         self._is_lor_calculated = True
 
     def _generate_labels(self):
