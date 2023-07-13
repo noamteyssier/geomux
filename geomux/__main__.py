@@ -63,13 +63,6 @@ def get_args():
         default=1,
         help="Number of jobs to use when calculating hypergeometric distributions (default=1)",
     )
-    parser.add_argument(
-        "-q",
-        "--quiet",
-        action="store_true",
-        required=False,
-        help="Suppress progress messages",
-    )
     args = parser.parse_args()
     return args
 
@@ -93,7 +86,6 @@ def main_cli():
         min_cells=args.min_cells,
         n_jobs=args.n_jobs,
         method=args.correction,
-        verbose=not args.quiet,
     )
     gx.test()
     assignments = gx.assignments(
