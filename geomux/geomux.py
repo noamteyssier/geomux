@@ -6,6 +6,7 @@ import pandas as pd
 from scipy.stats import hypergeom
 from scipy.special import logit
 from adjustpy import adjust
+import logging
 
 
 class Geomux:
@@ -17,7 +18,6 @@ class Geomux:
         min_umi: int = 5,
         min_cells: int = 100,
         n_jobs: int = 4,
-        verbose: bool = False,
         method: str = "bh",
     ):
         """
@@ -60,7 +60,6 @@ class Geomux:
         self.min_umi = min_umi
         self.min_cells = min_cells
         self.n_jobs = n_jobs
-        self.verbose = verbose
         self.method = method
         self._n_total = matrix.shape[0]
         self._m_total = matrix.shape[1]
@@ -88,55 +87,52 @@ class Geomux:
         Filters the matrix to only include cells with at least
         `min_umi` UMIs
         """
+        logging.info("--- Filtering matrix ---")
+        logging.info(f"Original matrix shape: {self.matrix.shape}")
+
         cell_sums = self.matrix.sum(axis=1)
         guide_sums = self.matrix.sum(axis=0)
         self.passing_cells = cell_sums >= self.min_umi
         self.passing_guides = guide_sums >= self.min_cells
         self.matrix = self.matrix[self.passing_cells][:, self.passing_guides]
-        if self.verbose:
-            print("---------------------------------------")
-            print(
-                "INFO: Average number of UMIs per cell: {:.2f}".format(cell_sums.mean())
-            )
-            print("INFO: Variance of UMIs per cell: {:.2f}".format(cell_sums.var()))
-            print(
-                "INFO: Cell UMI counts range from {} to {}".format(
-                    cell_sums.min(), cell_sums.max()
-                )
-            )
-            print("---------------------------------------")
 
-            print(
-                "INFO: Average number of cells per guide: {:.2f}".format(
-                    guide_sums.mean()
-                )
-            )
-            print("INFO: Variance of cells per guide: {:.2f}".format(guide_sums.var()))
-            print(
-                "INFO: Guide cell counts range from {} to {}".format(
-                    guide_sums.min(), guide_sums.max()
-                )
-            )
-            print("---------------------------------------")
-            old_cell_size = self._n_total
-            new_cell_size = self.matrix.shape[0]
-            print(
-                "LOG: Removed {} ({:.2f}%) cells with < {} UMIs".format(
-                    old_cell_size - new_cell_size,
-                    100 * (old_cell_size - new_cell_size) / old_cell_size,
-                    self.min_umi,
-                )
-            )
+        logging.info(f"Filtered matrix shape: {self.matrix.shape}")
 
-            old_guide_size = self._m_total
-            new_guide_size = self.matrix.shape[1]
-            print(
-                "LOG: Removed {} ({:.2f}%) guides with < {} Cells".format(
-                    old_guide_size - new_guide_size,
-                    100 * (old_guide_size - new_guide_size) / old_guide_size,
-                    self.min_cells,
-                )
+        logging.info("--- Summary statistics ---")
+        logging.info(f"Average number of UMIs per cell: {cell_sums.mean():.2f}")
+        logging.info(f"Variance of UMIs per cell: {cell_sums.var():.2f}")
+        logging.info(
+            f"Cell UMI counts range from {cell_sums.min()} to {cell_sums.max()}"
+        )
+
+        logging.info(f"Average number of cells per guide: {guide_sums.mean():.2f}")
+        logging.info(f"Variance of cells per guide: {guide_sums.var():.2f}")
+        logging.info(
+            f"Guide cell counts range from {guide_sums.min()} to {guide_sums.max()}"
+        )
+
+        old_cell_size = self._n_total
+        new_cell_size = self.matrix.shape[0]
+
+        logging.info("--- Filtering Statistics ---")
+        logging.info(
+            "Removed {} ({:.2f}%) cells with < {} UMIs".format(
+                old_cell_size - new_cell_size,
+                100 * (old_cell_size - new_cell_size) / old_cell_size,
+                self.min_umi,
             )
+        )
+
+        old_guide_size = self._m_total
+        new_guide_size = self.matrix.shape[1]
+        logging.info(
+            "Removed {} ({:.2f}%) guides with < {} Cells".format(
+                old_guide_size - new_guide_size,
+                100 * (old_guide_size - new_guide_size) / old_guide_size,
+                self.min_cells,
+            )
+        )
+
         if self.matrix.shape[0] == 0:
             raise ValueError(
                 "No cells passed the UMI threshold. Try lowering the min_umi parameter"
@@ -180,6 +176,7 @@ class Geomux:
         """
         Performs cell x guide geometric testing
         """
+        logging.info("--- Hypergeometric Testing ---")
         with Pool(self.n_jobs) as p:
             pv_mat = np.vstack(
                 p.starmap(
@@ -189,13 +186,22 @@ class Geomux:
             )
 
         pv_mat = np.clip(pv_mat, np.min(pv_mat[pv_mat != 0]), 1)
+
+        logging.info("--- P-value Adjustment ---")
         self.pv_mat = self._adjust_pvalues(pv_mat)
+
         self.is_fit = True
 
     def _generate_assignments(self, threshold=0.05):
         if not self.is_fit:
             AttributeError("Please run `.test()` method first")
+
+        logging.info("--- P-Value Thresholding ---")
         self._assignment_matrix = self.pv_mat < threshold
+
+        self._n_assigned = np.sum(self._assignment_matrix.sum(axis=1) > 0)
+        logging.info(f"{self._n_assigned} cells assigned to guides")
+
         self._is_assigned = True
 
     def _calculate_log_odds(self, lor_threshold: float):
@@ -216,6 +222,8 @@ class Geomux:
         """
         if not self._is_assigned:
             raise AttributeError("Must assign guides first")
+
+        logging.info("--- Log Odds Calculation ---")
 
         # instantiate the log odds matrix
         self.lor_matrix = np.zeros((self._n_cells, self._n_guides))
@@ -245,6 +253,8 @@ class Geomux:
                 else:
                     self._assignment_matrix[i, j] = False
 
+        self._n_assigned = np.sum(self._assignment_matrix.sum(axis=1) > 0)
+        logging.info(f"{self._n_assigned} cells assigned to guides")
         self._is_lor_calculated = True
 
     def _generate_labels(self):
