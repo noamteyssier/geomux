@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "geomux"
-version = "0.2.8"
+version = "0.2.9"
 description = "A tool to assign identifiers to cell barcodes"
 authors = ["Noam Teyssier"]
 license = "MIT"
