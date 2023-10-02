@@ -165,7 +165,7 @@ class Geomux:
         idx : int
             index of the cell in the matrix
         """
-        return hypergeom.sf(x, self.population, self.successes, self.draws[idx])
+        return hypergeom.sf(x - 1, self.population, self.successes, self.draws[idx])
 
     def _adjust_pvalues(self, pvalues: np.ndarray):
         """
