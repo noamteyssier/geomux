@@ -397,7 +397,6 @@ class Geomux:
                 "n_umi": np.nan,
                 "min_pvalue": np.nan,
                 "max_count": np.nan,
-                "log_odds": np.nan,
                 "tested": False,
             },
             index=cell_id_out,
