@@ -1,7 +1,6 @@
-import scipy
-import numpy as np
-import pandas as pd
 import anndata as ad
+import pandas as pd
+import scipy
 
 
 def read_table(filename: str, sep: str = "\t") -> pd.DataFrame:
