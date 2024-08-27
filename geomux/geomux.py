@@ -1,12 +1,16 @@
-from multiprocessing import Pool
-from typing import List, Union, Optional
-import numpy as np
-from numpy.typing import ArrayLike
-import pandas as pd
-from scipy.stats import hypergeom
-from scipy.special import logit
-from adjustpy import adjust
 import logging
+from multiprocessing import Pool
+from typing import List, Optional, Union
+
+import numpy as np
+import pandas as pd
+from adjustpy import adjust
+from numpy.typing import ArrayLike
+from scipy.special import logit
+from scipy.stats import hypergeom
+
+# Sets the maximum probability for p=1 when measuring log-odds
+MAX_PROB = 1 - 1e-10
 
 
 class Geomux:
@@ -248,6 +252,9 @@ class Geomux:
             for j in sig_idx:
                 # find the next most significant insignificant guide
                 min_insig = self.pv_mat[i][~self._assignment_matrix[i]].min()
+
+                # sets the max probability in case of p=1
+                min_insig = min(min_insig, MAX_PROB)
 
                 # calculate the log odds
                 lor = logit(min_insig) - logit(self.pv_mat[i, j])
