@@ -26,6 +26,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - uses: yezz123/setup-uv@v4
+        with:
+          uv-venv: "uv"
 
       - name: Install project
         run: |
@@ -57,6 +59,8 @@ jobs:
       with:
         python-version: 3.11
     - uses: yezz123/setup-uv@v4
+      with:
+        uv-venv: "uv"
 
     - name: Install project
       run: |
