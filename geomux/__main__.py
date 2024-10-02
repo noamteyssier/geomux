@@ -1,6 +1,8 @@
-import sys
 import argparse
-from geomux import Geomux, read_table, read_anndata
+import sys
+
+from .geomux import Geomux
+from .utils import read_anndata, read_table
 
 
 def get_args():
