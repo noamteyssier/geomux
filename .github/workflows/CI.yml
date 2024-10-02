@@ -1,9 +1,8 @@
-name: Python Package using Conda
+name: Python Package CI
 
 on: [push]
 
 jobs:
-
   ci:
     needs: [ostest, full-ci]
     name: CI
@@ -17,16 +16,16 @@ jobs:
     strategy:
       max-parallel: 5
       matrix:
-        python-version: [ "3.9", "3.10", "3.11" ]
+        python-version: ["3.10", "3.11"]
 
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install uv
+      - name: Install uv and create venv
         run: |
           python -m pip install --upgrade pip
           pip install uv
@@ -34,26 +33,58 @@ jobs:
 
       - name: Install project
         run: |
-          uv pip install .
+          . .venv/bin/activate
+          uv pip install -e .[dev]
+          pip list
+
+      - name: Debug - Print Python path and package contents
+        run: |
+          . .venv/bin/activate
+          python -c "import sys; print(sys.path)"
+          python -c "import geomux; print(dir(geomux)); print(geomux.__file__)"
+
+      - name: Debug - Check package structure
+        run: |
+          . .venv/bin/activate
+          pip show -f geomux
+
+      - name: Debug - Print __main__.py contents
+        run: |
+          echo "Contents of __main__.py:"
+          cat geomux/__main__.py
 
       - name: Test with pytest
         run: |
-          uv run pytest -v
+          . .venv/bin/activate
+          pytest -v
+
+      - name: Debug - Check Python path for CLI
+        run: |
+          . .venv/bin/activate
+          python -c "import sys; import geomux; print(sys.path); print(geomux.__file__)"
+          which geomux
+
+      - name: Debug - Run module directly
+        run: |
+          . .venv/bin/activate
+          python -m geomux -i example/example.tsv.gz -o results_table.tab
 
       - name: Test table io from commandline
         run: |
-          uv run geomux -i example/example.tsv.gz -o results_table.tab
+          . .venv/bin/activate
+          geomux -i example/example.tsv.gz -o results_table.tab
 
       - name: Test adat io from commandline
         run: |
-          uv run geomux -i example/example.h5ad -o results_table.tab
+          . .venv/bin/activate
+          geomux -i example/example.h5ad -o results_table.tab
 
   ostest:
     runs-on: ${{ matrix.os }}
     strategy:
       max-parallel: 5
       matrix:
-        os: [ "windows-latest", "macos-latest" ]
+        os: ["windows-latest", "macos-latest"]
 
     steps:
     - uses: actions/checkout@v3
@@ -62,7 +93,7 @@ jobs:
       with:
         python-version: 3.11
 
-    - name: Install uv
+    - name: Install uv and create venv
       run: |
         python -m pip install --upgrade pip
         pip install uv
@@ -70,16 +101,21 @@ jobs:
 
     - name: Install project
       run: |
-        uv pip install .
+        . .venv/bin/activate  # Use 'call .venv\Scripts\activate' on Windows
+        uv pip install -e .[dev]
+        pip list
 
     - name: Test with pytest
       run: |
-        uv run pytest -v
+        . .venv/bin/activate  # Use 'call .venv\Scripts\activate' on Windows
+        pytest -v
 
     - name: Test table io from commandline
       run: |
-        uv run geomux -i example/example.tsv.gz -o results_table.tab
+        . .venv/bin/activate  # Use 'call .venv\Scripts\activate' on Windows
+        geomux -i example/example.tsv.gz -o results_table.tab
 
     - name: Test adat io from commandline
       run: |
-        uv run geomux -i example/example.h5ad -o results_table.tab
+        . .venv/bin/activate  # Use 'call .venv\Scripts\activate' on Windows
+        geomux -i example/example.h5ad -o results_table.tabg
