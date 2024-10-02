@@ -30,16 +30,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install uv
           uv venv
-          - name: Debug - Check venv
-          run: |
-            echo "Python version:"
-            python --version
-            echo "Pip version:"
-            pip --version
-            echo "Virtual env path:"
-            echo $VIRTUAL_ENV
-            echo "Python path:"
-            which python
+      - name: Debug - Check venv
+        run: |
+          echo "Python version:"
+          python --version
+          echo "Pip version:"
+          pip --version
+          echo "Virtual env path:"
+          echo $VIRTUAL_ENV
+          echo "Python path:"
+          which python
   
       - name: Install project
         run: |
