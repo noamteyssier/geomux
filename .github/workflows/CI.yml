@@ -30,12 +30,37 @@ jobs:
           python -m pip install --upgrade pip
           pip install uv
           uv venv
-
+          - name: Debug - Check venv
+          run: |
+            echo "Python version:"
+            python --version
+            echo "Pip version:"
+            pip --version
+            echo "Virtual env path:"
+            echo $VIRTUAL_ENV
+            echo "Python path:"
+            which python
+  
       - name: Install project
         run: |
           . .venv/bin/activate
-          uv pip install -e .[dev]
+          uv pip install -vv -e .[dev]
+          echo "Installed packages:"
           pip list
+
+      - name: Debug - Check installation
+        run: |
+          . .venv/bin/activate
+          echo "Current directory:"
+          pwd
+          echo "Directory contents:"
+          ls -R
+          echo "Pip show geomux:"
+          pip show -f geomux
+          echo "Python path:"
+          python -c "import sys; print(sys.path)"
+          echo "Try importing geomux:"
+          python -c "import geomux; print(geomux.__file__)"
 
       - name: Debug - Print Python path and package contents
         run: |
