@@ -1,5 +1,8 @@
 from .geomux import Geomux
-from .utils import read_table, read_anndata
+from .utils import read_anndata, read_table
+
+__all__ = ["Geomux", "read_table", "read_anndata"]
+
 import logging
 
 logging.basicConfig(
