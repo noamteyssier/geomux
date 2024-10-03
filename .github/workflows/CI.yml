@@ -45,7 +45,7 @@ jobs:
 
       - name: Test with pytest
         run: |
-          run pytest -v
+          pytest -v
 
       - name: Test table io from commandline
         run: |
