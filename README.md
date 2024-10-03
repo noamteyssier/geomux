@@ -97,17 +97,15 @@ observations as there are input cells.
 
 The columns of this dataframe will include:
 
-- cell_id
-    - The name of the cell provided or the index.
-- assignment
-    - A list representing all significant guides within that cell.
-- moi
-    - The number of significant guides within the cell.
-- n_umi
-    - The number of UMIs observed in the cell.
-- p_value
-    - The adjusted p-value of the hypergeometric test for that cell/guide test.
-- log_odds
-    - The log odds of observing the highest scoring guide compared to the second highest.
-- tested
-    - A bool flag representing whether the cell was included in the test (or `False` if it was filtered for low UMI counts)
+| Column Name | Description |
+| ----------- | ----------- |
+| cell_id | The name of the cell provided or the index. |
+| assignment | A list representing all significant guides within that cell. |
+| counts | The number of UMIs observed in the cell. |
+| pvalues | The adjusted p-value of the hypergeometric test for that cell/guide test. |
+| log_odds | The log odds of observing the highest scoring guide compared to the second highest. |
+| moi | The number of significant guides within the cell. |
+| n_umi | The number of UMIs observed in the cell. |
+| min_pvalue | The minimum pvalue across all significant guides within the cell. |
+| max_count | The maximum count across all significant guides within the cell. |
+| tested | A bool flag representing whether the cell was included in the test (or `False` if it was filtered for low UMI counts) |
