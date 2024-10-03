@@ -19,3 +19,4 @@ geomux = "geomux.__main__:main_cli"
 
 [tool.uv]
 dev-dependencies = ["pytest>=8.3.3", "muxsim>=0.1.0", "black>=24.8.0"]
+package = true
