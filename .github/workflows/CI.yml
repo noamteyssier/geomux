@@ -39,21 +39,21 @@ jobs:
         run: |
           uv sync --all-extras --dev
 
-      # - name: Activate venv
-      #   run: |
-      #     source .venv/bin/activate
+      - name: Activate venv
+        run: |
+          source .venv/bin/activate
 
       - name: Test with pytest
         run: |
-          uv run pytest -v
+          run pytest -v
 
       - name: Test table io from commandline
         run: |
-          uv run geomux -i example/example.tsv.gz -o results_table.tab
+          geomux -i example/example.tsv.gz -o results_table.tab
 
       - name: Test adat io from commandline
         run: |
-          uv run geomux -i example/example.h5ad -o results_table.tab
+          geomux -i example/example.h5ad -o results_table.tab
 
   # ostest:
   #   runs-on: ${{ matrix.os }}
