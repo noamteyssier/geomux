@@ -39,11 +39,11 @@ wheels = [
 
 [[package]]
 name = "array-api-compat"
-version = "1.8"
+version = "1.9"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/82/2a/0614f2fa0170a1144874fd858717019e436d1f003d0fbb4d15894207a5ec/array_api_compat-1.8.tar.gz", hash = "sha256:f5cc7c6765226b58c99a8a695becb5c53bfb38cd69e40e8773d05eeaab52bddd", size = 34150 }
+sdist = { url = "https://files.pythonhosted.org/packages/e9/2c/3568b547cec656e717e5f3fe2b899c3ef052aef17c137c2c04635854c9c5/array_api_compat-1.9.tar.gz", hash = "sha256:8fb35f2895822b1cc6618449efd84aa76dcea1ab96940304f869663fd6a0dcd8", size = 42870 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0f/22/8228be1d3c6d4ffcf05cd89872ce65c1317b2af98d34b9d89b247d8d49cb/array_api_compat-1.8-py3-none-any.whl", hash = "sha256:140204454086264d37263bc4afe1182b428353e94e9edcc38d17b009863c982d", size = 38558 },
+    { url = "https://files.pythonhosted.org/packages/45/78/17985eac75d04c30f8cc375e4400e20b0787dc4a1c853a8fe9fad7932f55/array_api_compat-1.9-py3-none-any.whl", hash = "sha256:76db63c2d2461ba0e86b920c8b087f0a1617eb14de3ec29fe6811eeecad9c5e8", size = 49489 },
 ]
 
 [[package]]
