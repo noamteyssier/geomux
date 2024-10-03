@@ -45,14 +45,17 @@ jobs:
 
       - name: Test with pytest
         run: |
+          source .venv/bin/activate
           pytest -v
 
       - name: Test table io from commandline
         run: |
+          source .venv/bin/activate
           geomux -i example/example.tsv.gz -o results_table.tab
 
       - name: Test adat io from commandline
         run: |
+          source .venv/bin/activate
           geomux -i example/example.h5ad -o results_table.tab
 
   # ostest:
