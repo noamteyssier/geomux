@@ -26,16 +26,16 @@ def main_cli(
     lor_threshold: Annotated[
         float,
         typer.Option(
-            help="Log odds ratio threshold to use (default=10.0)",
+            help="Log odds ratio threshold to use",
         ),
     ] = 10.0,
     correction: Annotated[
-        str, typer.Option(help="Pvalue correction method to use (default=bh)")
+        str, typer.Option(help="Pvalue correction method to use")
     ] = "bh",
     n_jobs: Annotated[
         int,
         typer.Option(
-            help="Number of jobs to use when calculating hypergeometric distributions (default=1)"
+            help="Number of jobs to use when calculating hypergeometric distributions"
         ),
     ] = 1,
 ):
