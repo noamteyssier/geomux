@@ -4,18 +4,15 @@ on: [push]
 
 jobs:
   ci:
-    needs: [
-      ostest, 
-      full-ci,
-    ]
+    needs: [ostest, full-ci]
     name: CI
-    runs-on: 'ubuntu-latest'
+    runs-on: "ubuntu-latest"
     steps:
       - name: Done
         run: exit 0
 
   full-ci:
-    runs-on: 'ubuntu-latest'
+    runs-on: "ubuntu-latest"
     strategy:
       max-parallel: 5
       matrix:
@@ -26,11 +23,11 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
-        
+
       - name: Set up Python ${{ matrix.python-version }}
         run: |
           uv python install ${{ matrix.python-version }}
-          uv venv  
+          uv venv
 
       - name: Install project
         run: |
@@ -43,11 +40,11 @@ jobs:
 
       - name: Test table io from commandline
         run: |
-          uvx geomux -i example/example.tsv.gz -o results_table.tab
+          uvx geomux example/example.tsv.gz results_table.tab
 
       - name: Test adat io from commandline
         run: |
-          uvx geomux -i example/example.h5ad -o results_table.tab
+          uvx geomux example/example.h5ad results_table.tab
 
   ostest:
     runs-on: ${{ matrix.os }}
@@ -57,27 +54,27 @@ jobs:
         os: ["windows-latest", "macos-latest"]
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-    - name: Set up Python 3.11
-      run: uv python install 3.11
+      - name: Set up Python 3.11
+        run: uv python install 3.11
 
-    - name: Install project
-      run: |
-        uv sync --all-extras --dev
-        uv tool install .
+      - name: Install project
+        run: |
+          uv sync --all-extras --dev
+          uv tool install .
 
-    - name: Test with pytest
-      run: |
-        uv run pytest -v
+      - name: Test with pytest
+        run: |
+          uv run pytest -v
 
-    - name: Test table io from commandline
-      run: |
-        uvx geomux -i example/example.tsv.gz -o results_table.tab
+      - name: Test table io from commandline
+        run: |
+          uvx geomux example/example.tsv.gz results_table.tab
 
-    - name: Test adat io from commandline
-      run: |
-        uvx geomux -i example/example.h5ad -o results_table.tab
+      - name: Test adat io from commandline
+        run: |
+          uvx geomux example/example.h5ad results_table.tab
