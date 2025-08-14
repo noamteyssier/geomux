@@ -406,7 +406,7 @@ class Geomux:
                 "log_odds": [
                     np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
                 ],
-                "moi": np.nan,
+                "moi": 0,
                 "n_umi": np.nan,
                 "min_pvalue": np.nan,
                 "max_count": np.nan,
@@ -414,7 +414,7 @@ class Geomux:
             },
             index=cell_id_out,
         )
-        return pd.concat([frame, null]).sort_index()
+        return pd.concat([frame, null.astype(frame.dtypes)]).sort_index()
 
     def assignments(
         self, pvalue_threshold: float = 0.05, lor_threshold: float = 10.0
