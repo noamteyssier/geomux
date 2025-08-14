@@ -39,8 +39,6 @@ def main_cli(
         ),
     ] = 1,
 ):
-    # args = get_args()
-
     if input.endswith(".h5ad"):
         matrix = ad.read_h5ad(input)
         cell_names = np.array(matrix.obs_names.values)
