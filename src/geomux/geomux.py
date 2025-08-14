@@ -42,29 +42,36 @@ class Geomux:
 
         # Load the matrix
         if isinstance(matrix, pd.DataFrame):
-            matrix = matrix.values
-        if isinstance(matrix, ad.AnnData):
+            self.matrix = matrix.values
+        elif isinstance(matrix, ad.AnnData):
             if matrix.X is None:
                 raise ValueError("AnnData object must have a .X attribute")
             if isinstance(matrix.X, np.ndarray) or isinstance(matrix.X, np.matrix):
-                matrix = np.array(matrix.X)
+                self.matrix = np.array(matrix.X)
             elif isinstance(matrix.X, csr_matrix) or isinstance(matrix.X, csc_matrix):
-                matrix = np.array(matrix.X.todense())
+                self.matrix = np.array(matrix.X.todense())
             else:
                 raise ValueError(
                     "AnnData object must have a numpy array or sparse matrix as .X attribute"
                 )
-        self.matrix = matrix
+        else:
+            self.matrix = matrix
 
         # Load the cell and guide names
         if cell_names is None:
-            cell_names = np.arange(matrix.shape[0])
+            if isinstance(matrix, ad.AnnData):
+                cell_names = np.array(matrix.obs_names)
+            else:
+                cell_names = np.arange(matrix.shape[0])
         else:
             assert len(cell_names) == matrix.shape[0]  # type: ignore
             cell_names = np.array(cell_names)
 
         if guide_names is None:
-            guide_names = np.arange(matrix.shape[1])
+            if isinstance(matrix, ad.AnnData):
+                guide_names = np.array(matrix.var_names)
+            else:
+                guide_names = np.arange(matrix.shape[1])
         else:
             assert len(guide_names) == matrix.shape[1]  # type: ignore
             guide_names = np.array(guide_names)
