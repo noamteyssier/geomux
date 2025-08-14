@@ -38,11 +38,11 @@ $ geomux --help
 
 Usage: geomux [OPTIONS] INPUT [OUTPUT]
 
-╭─ Arguments ───────────────────────────────────────────────────────────────╮
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ *    input       TEXT      Input file path (tsv/h5ad) to assign guides. [default: None] [required]                   │
 │      output      [OUTPUT]  Output file path (tsv) to save assignments. [default: geomux.tsv]                         │
-╰───────────────────────────────────────────────────────────────────────╯
-╭─ Options ─────────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --min-umi                 INTEGER  Minimum UMI count to consider a barcode [default: 5]                              │
 │ --min-cells               INTEGER  Minimum number of barcodes to consider a guide [default: 100]                     │
 │ --pvalue-threshold        FLOAT    Maximum pvalue (fdr) to consider a guide-assignment [default: 0.05]               │
@@ -50,7 +50,7 @@ Usage: geomux [OPTIONS] INPUT [OUTPUT]
 │ --correction              TEXT     Pvalue correction method to use [default: bh]                                     │
 │ --n-jobs                  INTEGER  Number of jobs to use when calculating hypergeometric distributions [default: 1]  │
 │ --help                             Show this message and exit.                                                       │
-╰───────────────────────────────────────────────────────────────────────╯
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### Python Module
