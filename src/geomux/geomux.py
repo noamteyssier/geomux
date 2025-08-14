@@ -2,10 +2,12 @@ import logging
 from multiprocessing import Pool
 from typing import List, Optional, Union
 
+import anndata as ad
 import numpy as np
 import pandas as pd
 from adjustpy import adjust
 from numpy.typing import ArrayLike
+from scipy.sparse import csc_matrix, csr_matrix
 from scipy.special import logit
 from scipy.stats import hypergeom
 
@@ -16,7 +18,7 @@ MAX_PROB = 1 - 1e-10
 class Geomux:
     def __init__(
         self,
-        matrix: Union[np.ndarray, pd.DataFrame],
+        matrix: Union[np.ndarray, pd.DataFrame, ad.AnnData],
         cell_names: Optional[Union[List[str], np.ndarray, ArrayLike]] = None,
         guide_names: Optional[Union[List[str], np.ndarray, ArrayLike]] = None,
         min_umi: int = 5,
@@ -42,6 +44,17 @@ class Geomux:
         # Load the matrix
         if isinstance(matrix, pd.DataFrame):
             matrix = matrix.values
+        if isinstance(matrix, ad.AnnData):
+            if matrix.X is None:
+                raise ValueError("AnnData object must have a .X attribute")
+            if isinstance(matrix.X, np.ndarray) or isinstance(matrix.X, np.matrix):
+                matrix = np.array(matrix.X)
+            elif isinstance(matrix.X, csr_matrix) or isinstance(matrix.X, csc_matrix):
+                matrix = np.array(matrix.X.todense())
+            else:
+                raise ValueError(
+                    "AnnData object must have a numpy array or sparse matrix as .X attribute"
+                )
         self.matrix = matrix
 
         # Load the cell and guide names
@@ -94,8 +107,8 @@ class Geomux:
         logging.info("--- Filtering matrix ---")
         logging.info(f"Original matrix shape: {self.matrix.shape}")
 
-        cell_sums = self.matrix.sum(axis=1)
-        guide_sums = self.matrix.sum(axis=0)
+        cell_sums = self.matrix.sum(axis=1).flatten()
+        guide_sums = self.matrix.sum(axis=0).flatten()
         self.passing_cells = cell_sums >= self.min_umi
         self.passing_guides = guide_sums >= self.min_cells
         self.matrix = self.matrix[self.passing_cells][:, self.passing_guides]
@@ -184,6 +197,7 @@ class Geomux:
         Performs cell x guide geometric testing
         """
         logging.info("--- Hypergeometric Testing ---")
+        logging.info(f"Number of cells to test: {self._n_cells}")
         with Pool(self.n_jobs) as p:
             pv_mat = np.vstack(
                 p.starmap(
