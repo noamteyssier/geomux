@@ -1,7 +1,10 @@
 import argparse
 import sys
 
-from geomux import Geomux, read_anndata, read_table
+import anndata as ad
+import numpy as np
+
+from geomux import Geomux, read_table
 
 
 def get_args():
@@ -72,17 +75,21 @@ def main_cli():
     args = get_args()
 
     if args.input.endswith(".h5ad"):
-        matrix = read_anndata(args.input)
+        matrix = ad.read_h5ad(args.input)
+        cell_names = np.array(matrix.obs_names.values)
+        guide_names = np.array(matrix.var_names.values)
     else:
         matrix = read_table(args.input)
+        cell_names = np.array(matrix.index.values)
+        guide_names = np.array(matrix.columns.values)
 
     if args.correction not in ["bh", "bonferroni", "by"]:
         raise ValueError("Correction method must be one of: bh, bonferroni, by")
 
     gx = Geomux(
         matrix,
-        cell_names=matrix.index.values,
-        guide_names=matrix.columns.values,
+        cell_names=cell_names,
+        guide_names=guide_names,
         min_umi=args.min_umi,
         min_cells=args.min_cells,
         n_jobs=args.n_jobs,

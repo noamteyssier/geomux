@@ -6,7 +6,6 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 from adjustpy import adjust  # type: ignore
-from numpy.typing import ArrayLike
 from scipy.sparse import csc_matrix, csr_matrix
 from scipy.special import logit
 from scipy.stats import hypergeom
@@ -19,8 +18,8 @@ class Geomux:
     def __init__(
         self,
         matrix: Union[np.ndarray, pd.DataFrame, ad.AnnData],
-        cell_names: Optional[Union[List[str], np.ndarray, ArrayLike]] = None,
-        guide_names: Optional[Union[List[str], np.ndarray, ArrayLike]] = None,
+        cell_names: Optional[Union[List[str], np.ndarray]] = None,
+        guide_names: Optional[Union[List[str], np.ndarray]] = None,
         min_umi: int = 5,
         min_cells: int = 100,
         n_jobs: int = 4,
