@@ -55,6 +55,20 @@ Usage: geomux [OPTIONS] INPUT [OUTPUT]
 
 ### Python Module
 
+#### Processing an h5ad file format
+
+```python
+import anndata as ad
+from geomux import Geomux
+
+input = "filename.h5ad"
+
+adata = ad.read_h5ad(input)
+gx = Geomux(adata)
+gx.test()
+assignments = gx.assignments
+```
+
 #### Processing a 3-column TSV of [barcode, guide, n_umi]
 
 ```python
@@ -70,24 +84,6 @@ gx = Geomux(
 )
 gx.test()
 assignments = gx.assignments()
-```
-
-#### Processing an h5ad file format
-
-```python
-import anndata as ad
-from geomux import Geomux
-
-input = "filename.h5ad"
-
-adata = ad.read_h5ad(input)
-gx = Geomux(
-    adata,
-    cell_names=adata.obs.index.values,
-    guide_names=adata.var.index.values,
-)
-gx.test()
-assignments = gx.assignments
 ```
 
 ## Outputs

@@ -40,11 +40,11 @@ jobs:
 
       - name: Test table io from commandline
         run: |
-          uvx geomux example/example.tsv.gz results_table.tab
+          uvx geomux example/example.tsv.gz results_table.tsv
 
       - name: Test adat io from commandline
         run: |
-          uvx geomux example/example.h5ad results_table.tab
+          uvx geomux example/example.h5ad results_table.tsv
 
   ostest:
     runs-on: ${{ matrix.os }}
@@ -73,8 +73,8 @@ jobs:
 
       - name: Test table io from commandline
         run: |
-          uvx geomux example/example.tsv.gz results_table.tab
+          uvx geomux example/example.tsv.gz results_table.tsv
 
       - name: Test adat io from commandline
         run: |
-          uvx geomux example/example.h5ad results_table.tab
+          uvx geomux example/example.h5ad results_table.tsv
