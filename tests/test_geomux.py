@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
-from geomux import Geomux
 from muxsim import MuxSim
+
+from geomux import Geomux
 
 
 def sample_barcode(b_size):
