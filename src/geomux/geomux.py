@@ -5,7 +5,7 @@ from typing import List, Optional, Union
 import anndata as ad
 import numpy as np
 import pandas as pd
-from adjustpy import adjust
+from adjustpy import adjust  # type: ignore
 from numpy.typing import ArrayLike
 from scipy.sparse import csc_matrix, csr_matrix
 from scipy.special import logit
@@ -61,13 +61,13 @@ class Geomux:
         if cell_names is None:
             cell_names = np.arange(matrix.shape[0])
         else:
-            assert len(cell_names) == matrix.shape[0]
+            assert len(cell_names) == matrix.shape[0]  # type: ignore
             cell_names = np.array(cell_names)
 
         if guide_names is None:
             guide_names = np.arange(matrix.shape[1])
         else:
-            assert len(guide_names) == matrix.shape[1]
+            assert len(guide_names) == matrix.shape[1]  # type: ignore
             guide_names = np.array(guide_names)
 
         self.cell_names = cell_names
@@ -294,7 +294,7 @@ class Geomux:
         guide_indices = np.arange(self._m_total)
         guide_mask = guide_indices[self.passing_guides]
         self.labels = [
-            self.guide_names[guide_mask[np.flatnonzero(self._assignment_matrix[i])]]
+            self.guide_names[guide_mask[np.flatnonzero(self._assignment_matrix[i])]]  # type: ignore
             for i in np.arange(self._n_cells)
         ]
 
@@ -374,8 +374,8 @@ class Geomux:
         cell_id_in = np.arange(self._n_total)[self.passing_cells]
         cell_id_out = np.arange(self._n_total)[~self.passing_cells]
 
-        cell_name_in = self.cell_names[self.passing_cells]
-        cell_name_out = self.cell_names[~self.passing_cells]
+        cell_name_in = self.cell_names[self.passing_cells]  # type: ignore
+        cell_name_out = self.cell_names[~self.passing_cells]  # type: ignore
 
         frame = pd.DataFrame(
             {
