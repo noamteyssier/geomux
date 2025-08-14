@@ -5,10 +5,9 @@ from typing import List, Optional, Union
 import anndata as ad
 import numpy as np
 import pandas as pd
-from adjustpy import adjust  # type: ignore
 from scipy.sparse import csc_matrix, csr_matrix
 from scipy.special import logit
-from scipy.stats import hypergeom
+from scipy.stats import false_discovery_control, hypergeom
 
 # Sets the maximum probability for p=1 when measuring log-odds
 MAX_PROB = 1 - 1e-10
@@ -194,7 +193,7 @@ class Geomux:
         """
         Adjust pvalues using the Bonferroni correction
         """
-        adj_pvalues = adjust(pvalues, self.method)
+        adj_pvalues = false_discovery_control(pvalues, method="bh")
         adj_pvalues = np.clip(adj_pvalues, np.min(adj_pvalues[adj_pvalues != 0]), 1)
         return adj_pvalues.reshape(pvalues.shape)
 
