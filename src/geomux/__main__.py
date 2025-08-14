@@ -1,3 +1,5 @@
+import logging
+
 import anndata as ad
 import numpy as np
 import typer
@@ -66,6 +68,7 @@ def main_cli(
         lor_threshold=lor_threshold,
     )
 
+    logging.info(f"Writing assignments to file: {output}")
     assignments.to_csv(output, sep="\t", index=False)
 
 
