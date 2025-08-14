@@ -163,3 +163,7 @@ cython_debug/
 poetry.lock
 
 # Project Specific
+uv.lock
+*.h5ad
+*.tsv
+notebooks/**

@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
-from geomux import Geomux
 from muxsim import MuxSim
+
+from geomux import Geomux
 
 
 def sample_barcode(b_size):
@@ -94,7 +95,7 @@ def test_geomux_all_cells_filtered():
     """
     gen = np.zeros((100, 100))
     try:
-        gx = Geomux(gen, min_umi=5)
+        _gx = Geomux(gen, min_umi=5)
         assert False
     except ValueError:
         pass
@@ -106,7 +107,7 @@ def test_geomux_all_guides_filtered():
     """
     gen = np.ones((100, 100))
     try:
-        gx = Geomux(gen, min_cells=101)
+        _gx = Geomux(gen, min_cells=101)
         assert False
     except ValueError:
         pass

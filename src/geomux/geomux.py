@@ -2,10 +2,11 @@ import logging
 from multiprocessing import Pool
 from typing import List, Optional, Union
 
+import anndata as ad
 import numpy as np
 import pandas as pd
-from adjustpy import adjust
-from numpy.typing import ArrayLike
+from adjustpy import adjust  # type: ignore
+from scipy.sparse import csc_matrix, csr_matrix
 from scipy.special import logit
 from scipy.stats import hypergeom
 
@@ -16,9 +17,9 @@ MAX_PROB = 1 - 1e-10
 class Geomux:
     def __init__(
         self,
-        matrix: Union[np.ndarray, pd.DataFrame],
-        cell_names: Optional[Union[List[str], np.ndarray, ArrayLike]] = None,
-        guide_names: Optional[Union[List[str], np.ndarray, ArrayLike]] = None,
+        matrix: Union[np.ndarray, pd.DataFrame, ad.AnnData],
+        cell_names: Optional[Union[List[str], np.ndarray]] = None,
+        guide_names: Optional[Union[List[str], np.ndarray]] = None,
         min_umi: int = 5,
         min_cells: int = 100,
         n_jobs: int = 4,
@@ -41,20 +42,38 @@ class Geomux:
 
         # Load the matrix
         if isinstance(matrix, pd.DataFrame):
-            matrix = matrix.values
-        self.matrix = matrix
+            self.matrix = matrix.values
+        elif isinstance(matrix, ad.AnnData):
+            if matrix.X is None:
+                raise ValueError("AnnData object must have a .X attribute")
+            if isinstance(matrix.X, np.ndarray) or isinstance(matrix.X, np.matrix):
+                self.matrix = np.array(matrix.X)
+            elif isinstance(matrix.X, csr_matrix) or isinstance(matrix.X, csc_matrix):
+                self.matrix = np.array(matrix.X.todense())
+            else:
+                raise ValueError(
+                    "AnnData object must have a numpy array or sparse matrix as .X attribute"
+                )
+        else:
+            self.matrix = matrix
 
         # Load the cell and guide names
         if cell_names is None:
-            cell_names = np.arange(matrix.shape[0])
+            if isinstance(matrix, ad.AnnData):
+                cell_names = np.array(matrix.obs_names)
+            else:
+                cell_names = np.arange(matrix.shape[0])
         else:
-            assert len(cell_names) == matrix.shape[0]
+            assert len(cell_names) == matrix.shape[0]  # type: ignore
             cell_names = np.array(cell_names)
 
         if guide_names is None:
-            guide_names = np.arange(matrix.shape[1])
+            if isinstance(matrix, ad.AnnData):
+                guide_names = np.array(matrix.var_names)
+            else:
+                guide_names = np.arange(matrix.shape[1])
         else:
-            assert len(guide_names) == matrix.shape[1]
+            assert len(guide_names) == matrix.shape[1]  # type: ignore
             guide_names = np.array(guide_names)
 
         self.cell_names = cell_names
@@ -94,8 +113,8 @@ class Geomux:
         logging.info("--- Filtering matrix ---")
         logging.info(f"Original matrix shape: {self.matrix.shape}")
 
-        cell_sums = self.matrix.sum(axis=1)
-        guide_sums = self.matrix.sum(axis=0)
+        cell_sums = self.matrix.sum(axis=1).flatten()
+        guide_sums = self.matrix.sum(axis=0).flatten()
         self.passing_cells = cell_sums >= self.min_umi
         self.passing_guides = guide_sums >= self.min_cells
         self.matrix = self.matrix[self.passing_cells][:, self.passing_guides]
@@ -184,6 +203,7 @@ class Geomux:
         Performs cell x guide geometric testing
         """
         logging.info("--- Hypergeometric Testing ---")
+        logging.info(f"Number of cells to test: {self._n_cells}")
         with Pool(self.n_jobs) as p:
             pv_mat = np.vstack(
                 p.starmap(
@@ -280,7 +300,7 @@ class Geomux:
         guide_indices = np.arange(self._m_total)
         guide_mask = guide_indices[self.passing_guides]
         self.labels = [
-            self.guide_names[guide_mask[np.flatnonzero(self._assignment_matrix[i])]]
+            self.guide_names[guide_mask[np.flatnonzero(self._assignment_matrix[i])]]  # type: ignore
             for i in np.arange(self._n_cells)
         ]
 
@@ -360,8 +380,8 @@ class Geomux:
         cell_id_in = np.arange(self._n_total)[self.passing_cells]
         cell_id_out = np.arange(self._n_total)[~self.passing_cells]
 
-        cell_name_in = self.cell_names[self.passing_cells]
-        cell_name_out = self.cell_names[~self.passing_cells]
+        cell_name_in = self.cell_names[self.passing_cells]  # type: ignore
+        cell_name_out = self.cell_names[~self.passing_cells]  # type: ignore
 
         frame = pd.DataFrame(
             {
@@ -393,7 +413,7 @@ class Geomux:
                 "log_odds": [
                     np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
                 ],
-                "moi": np.nan,
+                "moi": 0,
                 "n_umi": np.nan,
                 "min_pvalue": np.nan,
                 "max_count": np.nan,
@@ -401,7 +421,7 @@ class Geomux:
             },
             index=cell_id_out,
         )
-        return pd.concat([frame, null]).sort_index()
+        return pd.concat([frame, null.astype(frame.dtypes)]).sort_index()
 
     def assignments(
         self, pvalue_threshold: float = 0.05, lor_threshold: float = 10.0
