@@ -31,9 +31,6 @@ def main_cli(
             help="Log odds ratio threshold to use",
         ),
     ] = 10.0,
-    correction: Annotated[
-        str, typer.Option(help="Pvalue correction method to use")
-    ] = "bh",
     n_jobs: Annotated[
         int,
         typer.Option(
@@ -50,9 +47,6 @@ def main_cli(
         cell_names = np.array(matrix.index.values)
         guide_names = np.array(matrix.columns.values)
 
-    if correction not in ["bh", "bonferroni", "by"]:
-        raise ValueError("Correction method must be one of: bh, bonferroni, by")
-
     gx = Geomux(
         matrix,
         cell_names=cell_names,
@@ -60,7 +54,6 @@ def main_cli(
         min_umi=min_umi,
         min_cells=min_cells,
         n_jobs=n_jobs,
-        method=correction,
     )
     gx.test()
     assignments = gx.assignments(

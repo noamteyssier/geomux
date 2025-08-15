@@ -23,7 +23,6 @@ class Geomux:
         min_umi: int = 5,
         min_cells: int = 100,
         n_jobs: int = 4,
-        method: str = "bh",
         delimiter: str = "|",
     ):
         """
@@ -37,8 +36,6 @@ class Geomux:
             minimum number of cells to consider a guide
         n_jobs : int
             number of jobs to use for multiprocessing
-        method: str
-            pvalue adjustment procedure to use.
         delimiter: str
             delimiter used to separate multiple values in output table
         """
@@ -86,12 +83,10 @@ class Geomux:
         self.min_umi = min_umi
         self.min_cells = min_cells
         self.n_jobs = n_jobs
-        self.method = method
         self._n_total = matrix.shape[0]
         self._m_total = matrix.shape[1]
         self.delimiter = delimiter
 
-        self._set_procedure()
         self._filter_matrix()
         self._validate_guide_names()
         self._fit_parameters()
@@ -102,13 +97,6 @@ class Geomux:
 
         self.is_fit = False
         self.labels = []
-
-    def _set_procedure(self):
-        allowed_procedures = ["bonferroni", "bh", "by"]
-        if self.method not in allowed_procedures:
-            raise ValueError(
-                f"Provided method {self.method} not recognized. Choose from {', '.join(allowed_procedures)}"
-            )
 
     def _filter_matrix(self):
         """
