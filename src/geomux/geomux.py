@@ -11,6 +11,7 @@ from scipy.stats import false_discovery_control, hypergeom
 
 # Sets the maximum probability for p=1 when measuring log-odds
 MAX_PROB = 1 - 1e-10
+BACKUP_DELIMITER = "::"
 
 
 class Geomux:
@@ -22,7 +23,7 @@ class Geomux:
         min_umi: int = 5,
         min_cells: int = 100,
         n_jobs: int = 4,
-        method: str = "bh",
+        delimiter: str = "|",
     ):
         """
         Parameters
@@ -35,8 +36,8 @@ class Geomux:
             minimum number of cells to consider a guide
         n_jobs : int
             number of jobs to use for multiprocessing
-        method: str
-            pvalue adjustment procedure to use.
+        delimiter: str
+            delimiter used to separate multiple values in output table
         """
 
         # Load the matrix
@@ -82,12 +83,12 @@ class Geomux:
         self.min_umi = min_umi
         self.min_cells = min_cells
         self.n_jobs = n_jobs
-        self.method = method
         self._n_total = matrix.shape[0]
         self._m_total = matrix.shape[1]
+        self.delimiter = delimiter
 
-        self._set_procedure()
         self._filter_matrix()
+        self._validate_guide_names()
         self._fit_parameters()
 
         self._n_cells = self.matrix.shape[0]
@@ -96,13 +97,6 @@ class Geomux:
 
         self.is_fit = False
         self.labels = []
-
-    def _set_procedure(self):
-        allowed_procedures = ["bonferroni", "bh", "by"]
-        if self.method not in allowed_procedures:
-            raise ValueError(
-                f"Provided method {self.method} not recognized. Choose from {', '.join(allowed_procedures)}"
-            )
 
     def _filter_matrix(self):
         """
@@ -117,6 +111,9 @@ class Geomux:
         self.passing_cells = cell_sums >= self.min_umi
         self.passing_guides = guide_sums >= self.min_cells
         self.matrix = self.matrix[self.passing_cells][:, self.passing_guides]
+
+        # Stored for later use
+        self._filtered_counts = cell_sums[~self.passing_cells].copy()
 
         logging.info(f"Filtered matrix shape: {self.matrix.shape}")
         logging.info("")
@@ -166,6 +163,21 @@ class Geomux:
             raise ValueError(
                 "No guides passed the cell threshold. Try lowering the min_cells parameter"
             )
+
+    def _validate_guide_names(self):
+        any_conflicts = False
+        for g in self.guide_names:
+            if self.delimiter in str(g):
+                if BACKUP_DELIMITER in str(g):
+                    raise ValueError(
+                        f"Guide: {g} contains restricted characters {self.delimiter} or {BACKUP_DELIMITER}. Please update delimiter to use a character that is not found in your guide names"
+                    )
+                any_conflicts = True
+        if any_conflicts:
+            logging.warning(
+                f"Found a conflicting guide name with `{self.delimiter}`. Updating to delimiter: `{BACKUP_DELIMITER}`"
+            )
+            self.delimiter = BACKUP_DELIMITER
 
     def _fit_parameters(self):
         """
@@ -298,10 +310,14 @@ class Geomux:
 
         guide_indices = np.arange(self._m_total)
         guide_mask = guide_indices[self.passing_guides]
-        self.labels = [
-            self.guide_names[guide_mask[np.flatnonzero(self._assignment_matrix[i])]]  # type: ignore
-            for i in np.arange(self._n_cells)
-        ]
+
+        self.labels = []
+        for i in np.arange(self._n_cells):
+            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
+            guide_names = self.delimiter.join(
+                [str(x) for x in self.guide_names[guide_mask[assignment_indices]]]
+            )
+            self.labels.append(guide_names)
 
     def _select_counts(self):
         if not self._is_assigned:
@@ -309,10 +325,13 @@ class Geomux:
         if not self._is_lor_calculated:
             raise AttributeError("Must calculate log odds first")
 
-        self.counts = [
-            self.matrix[i][np.flatnonzero(self._assignment_matrix[i])]
-            for i in np.arange(self._n_cells)
-        ]
+        self.counts = []
+        for i in np.arange(self._n_cells):
+            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
+            counts = self.delimiter.join(
+                [str(int(x)) for x in self.matrix[i][assignment_indices]]
+            )
+            self.counts.append(counts)
 
     def _select_pvalues(self):
         if not self._is_assigned:
@@ -320,10 +339,13 @@ class Geomux:
         if not self._is_lor_calculated:
             raise AttributeError("Must calculate log odds first")
 
-        self.pvalues = [
-            self.pv_mat[i][np.flatnonzero(self._assignment_matrix[i])]
-            for i in np.arange(self._n_cells)
-        ]
+        self.pvalues = []
+        for i in np.arange(self._n_cells):
+            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
+            pvalues = self.delimiter.join(
+                [str(x) for x in self.pv_mat[i][assignment_indices]]
+            )
+            self.pvalues.append(pvalues)
 
     def _select_log_odds(self):
         if not self._is_assigned:
@@ -331,10 +353,13 @@ class Geomux:
         if not self._is_lor_calculated:
             raise AttributeError("Must calculate log odds first")
 
-        self.log_odds = [
-            self.lor_matrix[i][np.flatnonzero(self._assignment_matrix[i])]
-            for i in np.arange(self._n_cells)
-        ]
+        self.log_odds = []
+        for i in np.arange(self._n_cells):
+            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
+            log_odds = self.delimiter.join(
+                [str(x) for x in self.lor_matrix[i][assignment_indices]]
+            )
+            self.log_odds.append(log_odds)
 
     def _calculate_moi(self):
         if not self._is_assigned:
@@ -400,20 +425,12 @@ class Geomux:
         null = pd.DataFrame(
             {
                 "cell_id": cell_name_out,
-                "assignment": [
-                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
-                ],
-                "counts": [
-                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
-                ],
-                "pvalues": [
-                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
-                ],
-                "log_odds": [
-                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
-                ],
+                "assignment": "",
+                "counts": "",
+                "pvalues": "",
+                "log_odds": "",
                 "moi": 0,
-                "n_umi": np.nan,
+                "n_umi": self._filtered_counts,
                 "min_pvalue": np.nan,
                 "max_count": np.nan,
                 "tested": False,
