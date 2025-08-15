@@ -11,6 +11,7 @@ from scipy.stats import false_discovery_control, hypergeom
 
 # Sets the maximum probability for p=1 when measuring log-odds
 MAX_PROB = 1 - 1e-10
+BACKUP_DELIMITER = "::"
 
 
 class Geomux:
@@ -23,7 +24,7 @@ class Geomux:
         min_cells: int = 100,
         n_jobs: int = 4,
         method: str = "bh",
-        delimiter: str = '|'
+        delimiter: str = "|",
     ):
         """
         Parameters
@@ -92,6 +93,7 @@ class Geomux:
 
         self._set_procedure()
         self._filter_matrix()
+        self._validate_guide_names()
         self._fit_parameters()
 
         self._n_cells = self.matrix.shape[0]
@@ -173,6 +175,21 @@ class Geomux:
             raise ValueError(
                 "No guides passed the cell threshold. Try lowering the min_cells parameter"
             )
+
+    def _validate_guide_names(self):
+        any_conflicts = False
+        for g in self.guide_names:
+            if self.delimiter in g:
+                if BACKUP_DELIMITER in g:
+                    raise ValueError(
+                        f"Guide: {g} contains restricted characters {self.delimiter} or {BACKUP_DELIMITER}. Please update delimiter to use a character that is not found in your guide names"
+                    )
+                any_conflicts = True
+        if any_conflicts:
+            logging.warning(
+                f"Found a conflicting guide name with `{self.delimiter}`. Updating to delimiter: `{BACKUP_DELIMITER}`"
+            )
+            self.delimiter = BACKUP_DELIMITER
 
     def _fit_parameters(self):
         """
@@ -309,7 +326,9 @@ class Geomux:
         self.labels = []
         for i in np.arange(self._n_cells):
             assignment_indices = np.flatnonzero(self._assignment_matrix[i])
-            guide_names = self.delimiter.join([str(x) for x in self.guide_names[guide_mask[assignment_indices]]])
+            guide_names = self.delimiter.join(
+                [str(x) for x in self.guide_names[guide_mask[assignment_indices]]]
+            )
             self.labels.append(guide_names)
 
     def _select_counts(self):
@@ -321,7 +340,9 @@ class Geomux:
         self.counts = []
         for i in np.arange(self._n_cells):
             assignment_indices = np.flatnonzero(self._assignment_matrix[i])
-            counts = self.delimiter.join([str(int(x)) for x in self.matrix[i][assignment_indices]])
+            counts = self.delimiter.join(
+                [str(int(x)) for x in self.matrix[i][assignment_indices]]
+            )
             self.counts.append(counts)
 
     def _select_pvalues(self):
@@ -333,7 +354,9 @@ class Geomux:
         self.pvalues = []
         for i in np.arange(self._n_cells):
             assignment_indices = np.flatnonzero(self._assignment_matrix[i])
-            pvalues = self.delimiter.join([str(x) for x in self.pv_mat[i][assignment_indices]])
+            pvalues = self.delimiter.join(
+                [str(x) for x in self.pv_mat[i][assignment_indices]]
+            )
             self.pvalues.append(pvalues)
 
     def _select_log_odds(self):
@@ -345,7 +368,9 @@ class Geomux:
         self.log_odds = []
         for i in np.arange(self._n_cells):
             assignment_indices = np.flatnonzero(self._assignment_matrix[i])
-            log_odds = self.delimiter.join([str(x) for x in self.lor_matrix[i][assignment_indices]])
+            log_odds = self.delimiter.join(
+                [str(x) for x in self.lor_matrix[i][assignment_indices]]
+            )
             self.log_odds.append(log_odds)
 
     def _calculate_moi(self):
