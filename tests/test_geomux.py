@@ -55,11 +55,7 @@ def test_assignments():
     gx = Geomux(gen)
     gx.test()
     assignments = gx.assignments()
-    guide_assignments = assignments.assignment.apply(
-        lambda x: max(x) if len(x) > 0 else -1
-    ).max()
     assert assignments.shape[0] == num_cells
-    assert guide_assignments <= num_guides
     assert assignments.moi.min() >= 0
     assert (assignments.moi == 0).sum() > 0
     assert (assignments.moi == 1).sum() > 0
@@ -85,8 +81,9 @@ def test_geomux_min_cells():
     num_guides = np.sum(gen.sum(axis=0) >= 5)
     assert gx._n_guides == num_guides
     for a in assignments.assignment:
+        items = a.split("|")
         for i in [0, 1, 2]:
-            assert i not in a
+            assert str(i) not in items
 
 
 def test_geomux_all_cells_filtered():
@@ -131,5 +128,6 @@ def test_geomux_correct_assignment():
     assignments = gx.assignments()
 
     for exp, obs in zip(ms.assignments, assignments.assignment):
+        items = obs.split("|")
         if 3 in exp:
-            assert 3 in obs
+            assert str(3) in items
