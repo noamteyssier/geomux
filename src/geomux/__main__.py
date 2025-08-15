@@ -37,6 +37,12 @@ def main_cli(
             help="Number of jobs to use when calculating hypergeometric distributions"
         ),
     ] = 1,
+    delim: Annotated[
+        str,
+        typer.Option(
+            help="Delimiter to use for multi-value columns in output"
+        )
+    ] = "|",
 ):
     if input.endswith(".h5ad"):
         matrix = ad.read_h5ad(input)
@@ -54,6 +60,7 @@ def main_cli(
         min_umi=min_umi,
         min_cells=min_cells,
         n_jobs=n_jobs,
+        delimiter=delim,
     )
     gx.test()
     assignments = gx.assignments(
