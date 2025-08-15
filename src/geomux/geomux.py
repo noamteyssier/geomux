@@ -122,6 +122,9 @@ class Geomux:
         self.passing_guides = guide_sums >= self.min_cells
         self.matrix = self.matrix[self.passing_cells][:, self.passing_guides]
 
+        # Stored for later use
+        self._filtered_counts = cell_sums[~self.passing_cells].copy()
+
         logging.info(f"Filtered matrix shape: {self.matrix.shape}")
         logging.info("")
 
@@ -318,7 +321,7 @@ class Geomux:
         self.counts = []
         for i in np.arange(self._n_cells):
             assignment_indices = np.flatnonzero(self._assignment_matrix[i])
-            counts = self.delimiter.join([str(x) for x in self.matrix[i][assignment_indices]])
+            counts = self.delimiter.join([str(int(x)) for x in self.matrix[i][assignment_indices]])
             self.counts.append(counts)
 
     def _select_pvalues(self):
@@ -409,20 +412,12 @@ class Geomux:
         null = pd.DataFrame(
             {
                 "cell_id": cell_name_out,
-                "assignment": [
-                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
-                ],
-                "counts": [
-                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
-                ],
-                "pvalues": [
-                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
-                ],
-                "log_odds": [
-                    np.array([]) for _ in np.arange(np.sum(~self.passing_cells))
-                ],
+                "assignment": "",
+                "counts": "",
+                "pvalues": "",
+                "log_odds": "",
                 "moi": 0,
-                "n_umi": np.nan,
+                "n_umi": self._filtered_counts,
                 "min_pvalue": np.nan,
                 "max_count": np.nan,
                 "tested": False,
