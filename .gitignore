@@ -167,3 +167,4 @@ uv.lock
 *.h5ad
 *.tsv
 notebooks/**
+**.json
