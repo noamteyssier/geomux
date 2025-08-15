@@ -23,6 +23,7 @@ class Geomux:
         min_cells: int = 100,
         n_jobs: int = 4,
         method: str = "bh",
+        delimiter: str = '|'
     ):
         """
         Parameters
@@ -37,6 +38,8 @@ class Geomux:
             number of jobs to use for multiprocessing
         method: str
             pvalue adjustment procedure to use.
+        delimiter: str
+            delimiter used to separate multiple values in output table
         """
 
         # Load the matrix
@@ -85,6 +88,7 @@ class Geomux:
         self.method = method
         self._n_total = matrix.shape[0]
         self._m_total = matrix.shape[1]
+        self.delimiter = delimiter
 
         self._set_procedure()
         self._filter_matrix()
@@ -298,10 +302,12 @@ class Geomux:
 
         guide_indices = np.arange(self._m_total)
         guide_mask = guide_indices[self.passing_guides]
-        self.labels = [
-            self.guide_names[guide_mask[np.flatnonzero(self._assignment_matrix[i])]]  # type: ignore
-            for i in np.arange(self._n_cells)
-        ]
+
+        self.labels = []
+        for i in np.arange(self._n_cells):
+            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
+            guide_names = self.delimiter.join([str(x) for x in self.guide_names[guide_mask[assignment_indices]]])
+            self.labels.append(guide_names)
 
     def _select_counts(self):
         if not self._is_assigned:
@@ -309,10 +315,11 @@ class Geomux:
         if not self._is_lor_calculated:
             raise AttributeError("Must calculate log odds first")
 
-        self.counts = [
-            self.matrix[i][np.flatnonzero(self._assignment_matrix[i])]
-            for i in np.arange(self._n_cells)
-        ]
+        self.counts = []
+        for i in np.arange(self._n_cells):
+            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
+            counts = self.delimiter.join([str(x) for x in self.matrix[i][assignment_indices]])
+            self.counts.append(counts)
 
     def _select_pvalues(self):
         if not self._is_assigned:
@@ -320,10 +327,11 @@ class Geomux:
         if not self._is_lor_calculated:
             raise AttributeError("Must calculate log odds first")
 
-        self.pvalues = [
-            self.pv_mat[i][np.flatnonzero(self._assignment_matrix[i])]
-            for i in np.arange(self._n_cells)
-        ]
+        self.pvalues = []
+        for i in np.arange(self._n_cells):
+            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
+            pvalues = self.delimiter.join([str(x) for x in self.pv_mat[i][assignment_indices]])
+            self.pvalues.append(pvalues)
 
     def _select_log_odds(self):
         if not self._is_assigned:
@@ -331,10 +339,11 @@ class Geomux:
         if not self._is_lor_calculated:
             raise AttributeError("Must calculate log odds first")
 
-        self.log_odds = [
-            self.lor_matrix[i][np.flatnonzero(self._assignment_matrix[i])]
-            for i in np.arange(self._n_cells)
-        ]
+        self.log_odds = []
+        for i in np.arange(self._n_cells):
+            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
+            log_odds = self.delimiter.join([str(x) for x in self.lor_matrix[i][assignment_indices]])
+            self.log_odds.append(log_odds)
 
     def _calculate_moi(self):
         if not self._is_assigned:
