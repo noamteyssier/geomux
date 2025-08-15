@@ -1,3 +1,4 @@
+import json
 import logging
 
 import anndata as ad
@@ -6,6 +7,7 @@ import typer
 from typing_extensions import Annotated
 
 from geomux import Geomux, read_table
+from geomux.utils import assignment_statistics
 
 
 def main_cli(
@@ -38,11 +40,12 @@ def main_cli(
         ),
     ] = 1,
     delim: Annotated[
-        str,
-        typer.Option(
-            help="Delimiter to use for multi-value columns in output"
-        )
+        str, typer.Option(help="Delimiter to use for multi-value columns in output")
     ] = "|",
+    stats: Annotated[
+        str | None,
+        typer.Option(help="Output file to write assignment statistics to as json"),
+    ] = None,
 ):
     if input.endswith(".h5ad"):
         matrix = ad.read_h5ad(input)
@@ -70,6 +73,13 @@ def main_cli(
 
     logging.info(f"Writing assignments to file: {output}")
     assignments.to_csv(output, sep="\t", index=False)
+
+    # Write the statistics dictionary as json
+    if stats:
+        logging.info(f"Writing assignment statistics to file: {stats}")
+        statistics = assignment_statistics(assignments)
+        with open(stats, "w+") as f:
+            f.write(json.dumps(statistics, indent=2))
 
 
 def main():
