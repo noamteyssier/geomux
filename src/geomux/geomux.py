@@ -167,8 +167,8 @@ class Geomux:
     def _validate_guide_names(self):
         any_conflicts = False
         for g in self.guide_names:
-            if self.delimiter in g:
-                if BACKUP_DELIMITER in g:
+            if self.delimiter in str(g):
+                if BACKUP_DELIMITER in str(g):
                     raise ValueError(
                         f"Guide: {g} contains restricted characters {self.delimiter} or {BACKUP_DELIMITER}. Please update delimiter to use a character that is not found in your guide names"
                     )
