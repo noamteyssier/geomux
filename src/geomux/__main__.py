@@ -82,5 +82,17 @@ def main_cli(
             f.write(json.dumps(statistics, indent=2))
 
 
+def _version():
+    import sys
+
+    if "--version" in sys.argv:
+        from importlib.metadata import version
+        import sys
+
+        print(f"geomux {version('geomux')}")
+        sys.exit(0)
+
+
 def main():
+    _version()
     typer.run(main_cli)
