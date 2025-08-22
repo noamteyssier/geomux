@@ -40,6 +40,14 @@ def assignment_statistics(assignments: pd.DataFrame) -> dict:
         assignments[(assignments.tested) & (assignments.moi > 0)].moi,
         return_counts=True,
     )
+
+    # Set default values if no assignments
+    if mois.size == 0:
+        results["dominant_moi"] = 0
+        results["mois"] = []
+        results["moi_counts"] = []
+        return results
+
     results["dominant_moi"] = int(mois[np.argmax(moi_counts)])
     results["mois"] = list([int(x) for x in mois])
     results["moi_counts"] = list([int(x) for x in moi_counts])
