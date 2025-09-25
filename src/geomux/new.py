@@ -1,9 +1,10 @@
 import numpy as np
+import polars as pl
 from scipy.sparse import csr_matrix
 from scipy.special import logit
 from scipy.stats import false_discovery_control, hypergeom
 
-MIN_INSIG = 1e-10
+MAX_INSIG = 1 - 1e-10
 
 
 def _test(
@@ -13,7 +14,7 @@ def _test(
     draws: np.ndarray,
     successes: np.ndarray,
     population: int,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     # non-zero values
     values = matrix[idx, jdx]
 
@@ -28,33 +29,54 @@ def _test(
         np.min(pvalues[pvalues > 0]),  # set zeros to minimum nonzero p-value
         1.0,  # clip to 1.0 just in case
     )
-    return false_discovery_control(pvalues, method="bh")
+
+    return pvalues, false_discovery_control(pvalues, method="bh")
 
 
 def _atomic_lor_correction(
     lbound: int,
     rbound: int,
-    all_fdr: np.ndarray,
-    all_assigned: np.ndarray,
-    all_lor: np.ndarray,
+    fdr: np.ndarray,
+    assigned: np.ndarray,
+    lors: np.ndarray,
     lor_threshold: float,
+    max_insig: float = MAX_INSIG,
 ):
     """Determine whether the LOR is significant over the threshold.
 
-    Notably this will update the `all_assigned` array and `all_lor` array **inplace**.
+    Notably this will update `assigned` and `lors` arrays **inplace**.
     """
-    fdr = all_fdr[lbound:rbound]
-    assigned = all_assigned[lbound:rbound]
-    lors = all_lor[lbound:rbound]
+    sub_fdr = fdr[lbound:rbound]
+    sub_assigned = assigned[lbound:rbound]
+    sub_lors = lors[lbound:rbound]
 
-    sort_idx = np.argsort(fdr)[::-1]
-    min_insig = MIN_INSIG
+    # Skip full insignificant sets
+    if not np.any(sub_assigned):
+        return
 
-    for sidx in sort_idx:
-        lors[sidx] = logit(min_insig) - logit(fdr[sidx])
-        if lors[sidx] < lor_threshold:
-            assigned[sidx] = False
-            min_insig = fdr[sidx]
+    # Set the initial minimum insignificant FDR
+    if np.all(sub_assigned):
+        min_insig = max_insig
+    else:
+        min_insig = min(np.min(sub_fdr[~sub_assigned]), max_insig)
+
+    # Sort the FDR in descending order (most insignificant first)
+    sort_idx = np.argsort(sub_fdr)[::-1]
+
+    # Iterate over the sorted FDR values
+    for s in sort_idx:
+        # skip insignificant
+        if not sub_assigned[s]:
+            continue
+
+        # Calculate the LOR
+        s_fdr = sub_fdr[s]
+        sub_lors[s] = logit(min_insig) - logit(s_fdr)
+
+        # Reset the minimum insignificant FDR if the LOR is insignificant
+        if sub_lors[s] < lor_threshold:
+            sub_assigned[s] = False
+            min_insig = min(s_fdr, max_insig)
 
 
 def _lor_adjustment(
@@ -62,75 +84,182 @@ def _lor_adjustment(
     fdr: np.ndarray,
     idx: np.ndarray,
     lor_threshold: float = 10.0,
-) -> tuple[np.ndarray, np.ndarray]:
-    # Select all initially assigned guides
-    p_assigned = assigned[assigned]
+) -> np.ndarray:
+    step_changes = np.concatenate((np.flatnonzero(np.diff(idx) != 0) + 1, [idx.size]))
+    lors = np.zeros_like(fdr)
 
-    # Initialize the LOR array
-    p_lor = np.zeros(p_assigned.size)
-
-    # Subset the FDR and cell identity arrays to initially assigned guides
-    p_fdr = fdr[assigned]
-    p_idx = idx[assigned]
-
-    # Determine the cell identity step changes
-    # (assumes the idx array is sorted)
-    step_changes = np.concatenate(
-        (np.flatnonzero(np.diff(p_idx) != 0) + 1, [p_idx.size])
-    )
-
-    # Process each cell at a time
     lbound = 0
     for rbound in step_changes:
         _atomic_lor_correction(
-            lbound, rbound, p_fdr, p_assigned, p_lor, lor_threshold=lor_threshold
+            lbound=lbound,
+            rbound=rbound,
+            fdr=fdr,
+            assigned=assigned,
+            lors=lors,
+            lor_threshold=lor_threshold,
+            max_insig=fdr.mean(),
         )
         lbound = rbound
 
-    adj_assigned = np.zeros_like(assigned)
-    adj_assigned[np.flatnonzero(assigned)[p_assigned]] = True
+    return lors
 
-    full_lor = np.zeros_like(fdr)
-    full_lor[assigned] = p_lor
 
-    return adj_assigned, full_lor
+def _build_results(
+    matrix: csr_matrix,
+    idx: np.ndarray,
+    jdx: np.ndarray,
+    cell_names: np.ndarray,
+    cell_mask: np.ndarray,
+    guide_names: np.ndarray,
+    total_umis: np.ndarray,
+    assigned: np.ndarray,
+    fdrs: np.ndarray,
+    lors: np.ndarray,
+) -> pl.DataFrame:
+    # Determine the tested cell names and their total UMIs
+    tested_cell_names = cell_names[cell_mask]
+    tested_n_umis = total_umis[cell_mask]
+
+    # Build the assigned dataframe
+    assigned_cells = idx[assigned]
+    assigned_guides = jdx[assigned]
+    assigned_counts = (
+        np.array(matrix[assigned_cells, assigned_guides].data).flatten().astype(int)
+    )
+    assigned_total_counts = tested_n_umis[assigned_cells]
+    assigned_fdrs = fdrs[assigned]
+    assigned_lors = lors[assigned]
+    assigned_df = (
+        pl.DataFrame(
+            {
+                "cell_id": assigned_cells.astype(int),
+                "cell": tested_cell_names[assigned_cells].astype(str),
+                "guide_id": assigned_guides.astype(int),
+                "assignment": guide_names[assigned_guides].astype(str),
+                "umis": assigned_counts.astype(str),
+                "fdr": assigned_fdrs.astype(str),
+                "log_odds": assigned_lors.astype(str),
+                "n_umi": assigned_total_counts,
+            }
+        )
+        .group_by(["cell_id", "cell"])
+        .agg(
+            pl.col("assignment").len().alias("moi"),
+            pl.col("n_umi").max(),
+            pl.col("assignment").str.join("|"),
+            pl.col("umis").str.join("|"),
+            pl.col("fdr").str.join("|"),
+            pl.col("log_odds").str.join("|"),
+        )
+        .with_columns(pl.lit(True).alias("tested"))
+    )
+
+    # build the unassigned dataframe
+    unassigned_cells = idx[~assigned]
+    unassigned_total_counts = tested_n_umis[unassigned_cells]
+    unassigned_df = pl.DataFrame(
+        {
+            "cell_id": unassigned_cells,
+            "cell": tested_cell_names[unassigned_cells],
+            "moi": 0,
+            "n_umi": unassigned_total_counts,
+            "assignment": "",
+            "umis": "",
+            "fdr": "",
+            "log_odds": "",
+            "tested": True,
+        }
+    )
+
+    # build the dataframe for untested cells
+    missing_cells = cell_names[~cell_mask]
+    missing_n_umis = total_umis[~cell_mask]
+    missing_df = pl.DataFrame(
+        {
+            "cell_id": np.nan,
+            "cell": missing_cells,
+            "moi": 0,
+            "n_umi": missing_n_umis,
+            "assignment": "",
+            "umis": "",
+            "fdr": "",
+            "log_odds": "",
+            "tested": False,
+        }
+    )
+
+    # concatenate the dataframes
+    return pl.concat([assigned_df, unassigned_df, missing_df], how="vertical_relaxed")
 
 
 def geomux(
     matrix: csr_matrix,
-    min_umi: int = 5,
-    min_cells: int = 10,
+    cell_names: np.ndarray | None = None,
+    guide_names: np.ndarray | None = None,
+    min_umi_cells: int = 5,
+    min_umi_guides: int = 10,
     fdr_threshold: float = 0.05,
     lor_threshold: float = 10.0,
-):
+) -> pl.DataFrame:
+    if cell_names is not None:
+        if cell_names.size != matrix.shape[0]:  # type: ignore
+            raise ValueError(
+                f"cell_names (len={cell_names.size}) must have the same length as the number of rows in the matrix ({matrix.shape[0]})"  # type:ignore
+            )
+    else:
+        cell_names = np.arange(matrix.shape[0])  # type: ignore
+    if guide_names is not None:
+        if guide_names.size != matrix.shape[1]:  # type: ignore
+            raise ValueError(
+                f"guide_names (len={guide_names.size}) must have the same length as the number of columns in the matrix ({matrix.shape[1]})"  # type:ignore
+            )
+    else:
+        guide_names = np.arange(matrix.shape[1])  # type: ignore
+
+    assert isinstance(cell_names, np.ndarray)
+    assert isinstance(guide_names, np.ndarray)
+
     # Filter out cells and guides with insufficient counts
     cell_sums = np.array(matrix.sum(axis=1)).ravel()
     guide_sums = np.array(matrix.sum(axis=0)).ravel()
 
-    cell_mask = cell_sums >= min_cells
-    guide_mask = guide_sums >= min_umi
+    cell_mask = cell_sums >= min_umi_cells
+    guide_mask = guide_sums >= min_umi_guides
 
     # Determine the relevant submatrix
     submatrix = matrix[cell_mask][:, guide_mask]
 
     # Determine hypergeometric parameters for the dataset
-    draws = cell_sums[cell_mask]
-    successes = guide_sums[guide_mask]
-    population = np.sum(draws)
+    draws = np.array(submatrix.sum(axis=1)).ravel()
+    successes = np.array(submatrix.sum(axis=0)).ravel()
+    population = submatrix.sum()
 
     # Calculate hypergeometric statistics
     idx, jdx = submatrix.nonzero()
-    fdr = _test(submatrix, idx, jdx, draws, successes, population)
+    pvalues, fdr = _test(submatrix, idx, jdx, draws, successes, population)
 
     # Determine the initially assigned significant set
-    i_assigned = fdr <= fdr_threshold
+    assigned = fdr <= fdr_threshold
+    print(assigned.sum())
 
     # Correct assignments based on log odds ratio
-    assigned, lor = _lor_adjustment(
-        assigned=i_assigned,
+    lor = _lor_adjustment(
+        assigned=assigned,
         fdr=fdr,
         idx=idx,
         lor_threshold=lor_threshold,
     )
+    print(assigned.sum())
 
-    return (submatrix, idx, jdx, fdr, assigned, lor)
+    return _build_results(
+        matrix=submatrix,
+        idx=idx,
+        jdx=jdx,
+        cell_names=cell_names,
+        cell_mask=cell_mask,
+        guide_names=guide_names[guide_mask],
+        total_umis=cell_sums,
+        assigned=assigned,
+        fdrs=fdr,
+        lors=lor,
+    )
