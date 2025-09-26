@@ -111,42 +111,46 @@ def _build_results(
     cell_names: np.ndarray,
     cell_mask: np.ndarray,
     guide_names: np.ndarray,
+    guide_mask: np.ndarray,
     total_umis: np.ndarray,
     assigned: np.ndarray,
     fdrs: np.ndarray,
     lors: np.ndarray,
 ) -> pl.DataFrame:
-    # Determine the tested cell names and their total UMIs
+    # Get tested cell info and original indices
     tested_cell_names = cell_names[cell_mask]
     tested_n_umis = total_umis[cell_mask]
 
-    # Build the assigned dataframe
-    assigned_cells = idx[assigned]
-    assigned_guides = jdx[assigned]
-    assigned_counts = (
-        np.array(matrix[assigned_cells, assigned_guides].data).flatten().astype(int)
-    )
-    assigned_total_counts = tested_n_umis[assigned_cells]
-    assigned_fdrs = fdrs[assigned]
-    assigned_lors = lors[assigned]
+    # Create mapping from submatrix indices to original indices
+    original_cell_indices = np.flatnonzero(cell_mask)
+    original_guide_indices = np.flatnonzero(guide_mask)
+
+    # Build assigned dataframe
+    assigned_idx = idx[assigned]  # submatrix cell indices
+    assigned_jdx = jdx[assigned]  # submatrix guide indices
+    assigned_counts = np.array(matrix[assigned_idx, assigned_jdx]).flatten()
+
     assigned_df = (
         pl.DataFrame(
             {
-                "cell_id": assigned_cells.astype(int),
-                "cell": tested_cell_names[assigned_cells].astype(str),
-                "guide_id": assigned_guides.astype(int),
-                "assignment": guide_names[assigned_guides].astype(str),
+                "cell_id": original_cell_indices[assigned_idx],
+                "submatrix_id": assigned_idx,
+                "cell": tested_cell_names[assigned_idx],
+                "guide_id_submatrix": assigned_jdx,
+                "guide_id_original": original_guide_indices[assigned_jdx],
+                "assignment": guide_names[guide_mask][assigned_jdx],
                 "umis": assigned_counts.astype(str),
-                "fdr": assigned_fdrs.astype(str),
-                "log_odds": assigned_lors.astype(str),
-                "n_umi": assigned_total_counts,
+                "fdr": fdrs[assigned].astype(str),
+                "log_odds": lors[assigned].astype(str),
+                "n_umi": tested_n_umis[assigned_idx],
             }
         )
-        .group_by(["cell_id", "cell"])
+        .group_by(["cell_id", "submatrix_id", "cell"])
         .agg(
             pl.col("assignment").len().alias("moi"),
             pl.col("n_umi").max(),
             pl.col("assignment").str.join("|"),
+            pl.col("guide_id_original").str.join("|").alias("guide_ids_original"),
             pl.col("umis").str.join("|"),
             pl.col("fdr").str.join("|"),
             pl.col("log_odds").str.join("|"),
@@ -154,16 +158,20 @@ def _build_results(
         .with_columns(pl.lit(True).alias("tested"))
     )
 
-    # build the unassigned dataframe
-    unassigned_cells = idx[~assigned]
-    unassigned_total_counts = tested_n_umis[unassigned_cells]
+    # For unassigned cells
+    all_tested_cells = set(range(len(tested_cell_names)))
+    assigned_cell_set = set(assigned_idx)
+    unassigned_cell_indices = np.array(list(all_tested_cells - assigned_cell_set))
+
     unassigned_df = pl.DataFrame(
         {
-            "cell_id": unassigned_cells,
-            "cell": tested_cell_names[unassigned_cells],
+            "cell_id": original_cell_indices[unassigned_cell_indices],
+            "submatrix_id": unassigned_cell_indices,
+            "cell": tested_cell_names[unassigned_cell_indices],
             "moi": 0,
-            "n_umi": unassigned_total_counts,
+            "n_umi": tested_n_umis[unassigned_cell_indices],
             "assignment": "",
+            "guide_ids_original": "",
             "umis": "",
             "fdr": "",
             "log_odds": "",
@@ -171,16 +179,20 @@ def _build_results(
         }
     )
 
-    # build the dataframe for untested cells
-    missing_cells = cell_names[~cell_mask]
-    missing_n_umis = total_umis[~cell_mask]
+    # For untested cells - these keep their original indices
+    untested_indices = np.where(~cell_mask)[0]
+    untested_cell_names = cell_names[~cell_mask]
+    untested_n_umis = total_umis[~cell_mask]
+
     missing_df = pl.DataFrame(
         {
-            "cell_id": np.nan,
-            "cell": missing_cells,
+            "cell_id": untested_indices,
+            "submatrix_id": np.full(len(untested_cell_names), np.nan),
+            "cell": untested_cell_names,
             "moi": 0,
-            "n_umi": missing_n_umis,
+            "n_umi": untested_n_umis,
             "assignment": "",
+            "guide_ids_original": "",
             "umis": "",
             "fdr": "",
             "log_odds": "",
@@ -188,7 +200,6 @@ def _build_results(
         }
     )
 
-    # concatenate the dataframes
     return pl.concat([assigned_df, unassigned_df, missing_df], how="vertical_relaxed")
 
 
@@ -199,8 +210,9 @@ def geomux(
     min_umi_cells: int = 5,
     min_umi_guides: int = 10,
     fdr_threshold: float = 0.05,
-    lor_threshold: float = 10.0,
-) -> pl.DataFrame:
+    lor_threshold: float = 50.0,
+    subtract: bool = True,
+) -> tuple[csr_matrix, pl.DataFrame]:
     if cell_names is not None:
         if cell_names.size != matrix.shape[0]:  # type: ignore
             raise ValueError(
@@ -220,6 +232,7 @@ def geomux(
     assert isinstance(guide_names, np.ndarray)
 
     # Filter out cells and guides with insufficient counts
+    print("=== Filtering ===")
     cell_sums = np.array(matrix.sum(axis=1)).ravel()
     guide_sums = np.array(matrix.sum(axis=0)).ravel()
 
@@ -228,38 +241,52 @@ def geomux(
 
     # Determine the relevant submatrix
     submatrix = matrix[cell_mask][:, guide_mask]
+    if subtract:
+        submatrix.data -= 1
+        submatrix.eliminate_zeros()
 
     # Determine hypergeometric parameters for the dataset
     draws = np.array(submatrix.sum(axis=1)).ravel()
     successes = np.array(submatrix.sum(axis=0)).ravel()
     population = submatrix.sum()
 
+    print(f">> Number of testable cells: {cell_mask.sum()}")
+    print(f">> Number of testable guides: {guide_mask.sum()}")
+    print(f">> Mean cell UMI: {draws.mean():.2f}")
+    print(f">> Mean guide UMI: {successes.mean():.2f}")
+    print(f">> Total UMIs: {population}")
+
     # Calculate hypergeometric statistics
+    print("=== Hypergeometric Test ===")
     idx, jdx = submatrix.nonzero()
     pvalues, fdr = _test(submatrix, idx, jdx, draws, successes, population)
 
     # Determine the initially assigned significant set
     assigned = fdr <= fdr_threshold
-    print(assigned.sum())
+    print(f">> Initially assigned cell-guide pairs: {assigned.sum()}")
 
     # Correct assignments based on log odds ratio
+    print("=== Log Odds Ratio Adjustment ===")
     lor = _lor_adjustment(
         assigned=assigned,
         fdr=fdr,
         idx=idx,
         lor_threshold=lor_threshold,
     )
-    print(assigned.sum())
+    print(f">> Final assigned cell-guide pairs: {assigned.sum()}")
 
-    return _build_results(
+    results = _build_results(
         matrix=submatrix,
         idx=idx,
         jdx=jdx,
         cell_names=cell_names,
         cell_mask=cell_mask,
-        guide_names=guide_names[guide_mask],
+        guide_names=guide_names,
+        guide_mask=guide_mask,
         total_umis=cell_sums,
         assigned=assigned,
         fdrs=fdr,
         lors=lor,
     )
+
+    return (submatrix, results)
