@@ -212,7 +212,7 @@ def geomux(
     fdr_threshold: float = 0.05,
     lor_threshold: float = 50.0,
     subtract: bool = True,
-) -> tuple[csr_matrix, pl.DataFrame]:
+) -> pl.DataFrame:
     if cell_names is not None:
         if cell_names.size != matrix.shape[0]:  # type: ignore
             raise ValueError(
@@ -289,4 +289,4 @@ def geomux(
         lors=lor,
     )
 
-    return (submatrix, results)
+    return results
