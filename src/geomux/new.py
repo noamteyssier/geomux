@@ -161,7 +161,9 @@ def _build_results(
     # For unassigned cells
     all_tested_cells = set(range(len(tested_cell_names)))
     assigned_cell_set = set(assigned_idx)
-    unassigned_cell_indices = np.array(list(all_tested_cells - assigned_cell_set))
+    unassigned_cell_indices = np.array(
+        list(all_tested_cells - assigned_cell_set), dtype=int
+    )
 
     unassigned_df = pl.DataFrame(
         {
@@ -187,7 +189,7 @@ def _build_results(
     missing_df = pl.DataFrame(
         {
             "cell_id": untested_indices,
-            "submatrix_id": np.full(len(untested_cell_names), np.nan),
+            "submatrix_id": np.full(len(untested_cell_names), -1, dtype=int),
             "cell": untested_cell_names,
             "moi": 0,
             "n_umi": untested_n_umis,
@@ -233,8 +235,8 @@ def geomux(
 
     # Filter out cells and guides with insufficient counts
     print("=== Filtering ===")
-    cell_sums = np.array(matrix.sum(axis=1)).ravel()
-    guide_sums = np.array(matrix.sum(axis=0)).ravel()
+    cell_sums = np.array(matrix.sum(axis=1)).ravel().astype(int)
+    guide_sums = np.array(matrix.sum(axis=0)).ravel().astype(int)
 
     cell_mask = cell_sums >= min_umi_cells
     guide_mask = guide_sums >= min_umi_guides
@@ -246,8 +248,8 @@ def geomux(
         submatrix.eliminate_zeros()
 
     # Determine hypergeometric parameters for the dataset
-    draws = np.array(submatrix.sum(axis=1)).ravel()
-    successes = np.array(submatrix.sum(axis=0)).ravel()
+    draws = np.array(submatrix.sum(axis=1)).ravel().astype(int)
+    successes = np.array(submatrix.sum(axis=0)).ravel().astype(int)
     population = submatrix.sum()
 
     print(f">> Number of testable cells: {cell_mask.sum()}")
