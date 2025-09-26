@@ -16,7 +16,7 @@ def geomux(
     min_umi_guides: int = 10,
     fdr_threshold: float = 0.05,
     lor_threshold: float | None = None,
-    adaptive_lor_scalar: float = 0.35,
+    adaptive_lor_scalar: float = 0.4,
     subtract: bool = True,
 ) -> pl.DataFrame:
     if isinstance(matrix, ad.AnnData):
@@ -72,7 +72,7 @@ def _impl_geomux(
     min_umi_guides: int = 10,
     fdr_threshold: float = 0.05,
     lor_threshold: float | None = None,
-    adaptive_lor_scalar: float = 0.35,
+    adaptive_lor_scalar: float = 0.4,
     subtract: bool = True,
 ) -> pl.DataFrame:
     assert isinstance(cell_names, np.ndarray), "cell_names must be a numpy.ndarray"
@@ -120,9 +120,13 @@ def _impl_geomux(
     print("=== Log Odds Ratio Adjustment ===")
     if lor_threshold is None:
         nzmean = np.mean(submatrix.data)
-        lor_threshold = nzmean * adaptive_lor_scalar
         print(f">> Non-zero mean: {nzmean:.2f}")
-        print(f">> Adaptive Scalar: {adaptive_lor_scalar:.2f}")
+        if nzmean > 20:
+            print(f">> Adaptive Scalar: {adaptive_lor_scalar:.2f}")
+            lor_threshold = nzmean * adaptive_lor_scalar
+        else:
+            print(">> Low non-zero mean, overriding adaptive scalar to 0.0")
+            lor_threshold = 0.0
         print(f">> Adaptive LOR threshold set to: {lor_threshold:.2f}")
     assert lor_threshold is not None, "lor_threshold must be set"
     lor = _lor_adjustment(
@@ -226,7 +230,7 @@ def _lor_adjustment(
     assigned: np.ndarray,
     fdr: np.ndarray,
     idx: np.ndarray,
-    lor_threshold: float = 10.0,
+    lor_threshold: float,
 ) -> np.ndarray:
     step_changes = np.concatenate((np.flatnonzero(np.diff(idx) != 0) + 1, [idx.size]))
     lors = np.zeros_like(fdr)
