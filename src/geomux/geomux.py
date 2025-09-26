@@ -6,6 +6,7 @@ from scipy.special import logit
 from scipy.stats import false_discovery_control, hypergeom
 
 MAX_INSIG = 1 - 1e-10
+NZMEAN_BREAKPOINT = 20
 
 
 def geomux(
@@ -121,7 +122,7 @@ def _impl_geomux(
     if lor_threshold is None:
         nzmean = np.mean(submatrix.data)
         print(f">> Non-zero mean: {nzmean:.2f}")
-        if nzmean > 20:
+        if nzmean >= NZMEAN_BREAKPOINT:
             print(f">> Adaptive Scalar: {adaptive_lor_scalar:.2f}")
             lor_threshold = nzmean * adaptive_lor_scalar
         else:
