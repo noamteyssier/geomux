@@ -1,13 +1,11 @@
 import json
 
 import anndata as ad
-import numpy as np
 import typer
-from scipy.sparse import csr_matrix
 from typing_extensions import Annotated
 
-from geomux.new import geomux
-from geomux.utils import assignment_statistics
+from . import geomux
+from .utils import assignment_statistics
 
 
 def main_cli(
@@ -39,14 +37,8 @@ def main_cli(
     ] = None,
 ):
     adata = ad.read_h5ad(input)
-    matrix = csr_matrix(adata.X)
-    cell_names = np.array(adata.obs_names.values)
-    guide_names = np.array(adata.var_names.values)
-
     results = geomux(
-        matrix,
-        cell_names=cell_names,
-        guide_names=guide_names,
+        adata,
         min_umi_cells=min_umi_cells,
         min_umi_guides=min_umi_guides,
         fdr_threshold=fdr_threshold,

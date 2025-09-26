@@ -1,3 +1,4 @@
+import anndata as ad
 import numpy as np
 import polars as pl
 from scipy.sparse import csr_matrix
@@ -8,7 +9,7 @@ MAX_INSIG = 1 - 1e-10
 
 
 def geomux(
-    matrix: csr_matrix,
+    matrix: ad.AnnData | csr_matrix | np.ndarray,
     cell_names: np.ndarray | None = None,
     guide_names: np.ndarray | None = None,
     min_umi_cells: int = 5,
@@ -16,7 +17,20 @@ def geomux(
     fdr_threshold: float = 0.05,
     lor_threshold: float = 50.0,
     subtract: bool = True,
-) -> pl.DataFrame:
+):
+    if isinstance(matrix, ad.AnnData):
+        if cell_names is None:
+            cell_names = np.array(matrix.obs.index.values)
+        if guide_names is None:
+            guide_names = np.array(matrix.var.index.values)
+        matrix = csr_matrix(matrix.X)
+    elif isinstance(matrix, np.ndarray):
+        matrix = csr_matrix(matrix)
+    elif not isinstance(matrix, csr_matrix):
+        raise TypeError(
+            "matrix must be an AnnData, numpy.ndarray, or scipy.sparse.csr_matrix"
+        )
+
     if cell_names is not None:
         if cell_names.size != matrix.shape[0]:  # type: ignore
             raise ValueError(
@@ -32,6 +46,32 @@ def geomux(
     else:
         guide_names = np.arange(matrix.shape[1])  # type: ignore
 
+    assert isinstance(cell_names, np.ndarray), "cell_names must be a numpy.ndarray"
+    assert isinstance(guide_names, np.ndarray), "guide_names must be a numpy.ndarray"
+    assert isinstance(matrix, csr_matrix), "matrix must be a scipy.sparse.csr_matrix"
+
+    return _impl_geomux(
+        matrix,
+        cell_names=cell_names,
+        guide_names=guide_names,
+        min_umi_cells=min_umi_cells,
+        min_umi_guides=min_umi_guides,
+        fdr_threshold=fdr_threshold,
+        lor_threshold=lor_threshold,
+        subtract=subtract,
+    )
+
+
+def _impl_geomux(
+    matrix: csr_matrix,
+    cell_names: np.ndarray,
+    guide_names: np.ndarray,
+    min_umi_cells: int = 5,
+    min_umi_guides: int = 10,
+    fdr_threshold: float = 0.05,
+    lor_threshold: float = 50.0,
+    subtract: bool = True,
+) -> pl.DataFrame:
     assert isinstance(cell_names, np.ndarray), "cell_names must be a numpy.ndarray"
     assert isinstance(guide_names, np.ndarray), "guide_names must be a numpy.ndarray"
     assert isinstance(matrix, csr_matrix), "matrix must be a scipy.sparse.csr_matrix"
