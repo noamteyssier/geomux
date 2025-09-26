@@ -17,7 +17,7 @@ def geomux(
     fdr_threshold: float = 0.05,
     lor_threshold: float = 50.0,
     subtract: bool = True,
-):
+) -> pl.DataFrame:
     if isinstance(matrix, ad.AnnData):
         if cell_names is None:
             cell_names = np.array(matrix.obs.index.values)
@@ -258,44 +258,50 @@ def _build_results(
     original_cell_indices = np.flatnonzero(cell_mask)
     original_guide_indices = np.flatnonzero(guide_mask)
 
-    # Build assigned dataframe
-    assigned_idx = idx[assigned]  # submatrix cell indices
-    assigned_jdx = jdx[assigned]  # submatrix guide indices
-    assigned_counts = np.array(
-        matrix[assigned_idx, assigned_jdx], dtype=np.int64
-    ).flatten()
+    if np.any(assigned):
+        # Build assigned dataframe
+        assigned_idx = idx[assigned]  # submatrix cell indices
+        assigned_jdx = jdx[assigned]  # submatrix guide indices
+        assigned_counts = np.array(
+            matrix[assigned_idx, assigned_jdx], dtype=np.int64
+        ).flatten()
 
-    assigned_df = (
-        pl.DataFrame(
-            {
-                "cell_id": original_cell_indices[assigned_idx],
-                "submatrix_id": assigned_idx,
-                "cell": tested_cell_names[assigned_idx],
-                "guide_id_submatrix": assigned_jdx,
-                "guide_id_original": original_guide_indices[assigned_jdx],
-                "assignment": guide_names[guide_mask][assigned_jdx],
-                "umis": assigned_counts.astype(str),
-                "fdr": fdrs[assigned].astype(str),
-                "log_odds": lors[assigned].astype(str),
-                "n_umi": tested_n_umis[assigned_idx],
-            }
+        assigned_df = (
+            pl.DataFrame(
+                {
+                    "cell_id": original_cell_indices[assigned_idx],
+                    "submatrix_id": assigned_idx,
+                    "cell": tested_cell_names[assigned_idx],
+                    "guide_id_submatrix": assigned_jdx,
+                    "guide_id_original": original_guide_indices[assigned_jdx],
+                    "assignment": guide_names[guide_mask][assigned_jdx],
+                    "umis": assigned_counts.astype(str),
+                    "fdr": fdrs[assigned].astype(str),
+                    "log_odds": lors[assigned].astype(str),
+                    "n_umi": tested_n_umis[assigned_idx],
+                }
+            )
+            .group_by(["cell_id", "submatrix_id", "cell"])
+            .agg(
+                pl.col("assignment").len().alias("moi"),
+                pl.col("n_umi").max(),
+                pl.col("assignment").str.join("|"),
+                pl.col("guide_id_original").str.join("|").alias("guide_ids_original"),
+                pl.col("umis").str.join("|"),
+                pl.col("fdr").str.join("|"),
+                pl.col("log_odds").str.join("|"),
+            )
+            .with_columns(pl.lit(True).alias("tested"))
         )
-        .group_by(["cell_id", "submatrix_id", "cell"])
-        .agg(
-            pl.col("assignment").len().alias("moi"),
-            pl.col("n_umi").max(),
-            pl.col("assignment").str.join("|"),
-            pl.col("guide_id_original").str.join("|").alias("guide_ids_original"),
-            pl.col("umis").str.join("|"),
-            pl.col("fdr").str.join("|"),
-            pl.col("log_odds").str.join("|"),
-        )
-        .with_columns(pl.lit(True).alias("tested"))
-    )
+    else:
+        assigned_df = pl.DataFrame()
 
     # For unassigned cells
     all_tested_cells = set(range(len(tested_cell_names)))
-    assigned_cell_set = set(assigned_idx)
+    if np.any(assigned):
+        assigned_cell_set = set(assigned_idx)
+    else:
+        assigned_cell_set = set()
     unassigned_cell_indices = np.array(
         list(all_tested_cells - assigned_cell_set), dtype=np.int64
     )
@@ -337,4 +343,9 @@ def _build_results(
         }
     )
 
-    return pl.concat([assigned_df, unassigned_df, missing_df], how="vertical_relaxed")
+    if assigned_df.is_empty():
+        return pl.concat([unassigned_df, missing_df], how="vertical_relaxed")
+    else:
+        return pl.concat(
+            [assigned_df, unassigned_df, missing_df], how="vertical_relaxed"
+        )
