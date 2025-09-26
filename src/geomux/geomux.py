@@ -261,7 +261,9 @@ def _build_results(
     # Build assigned dataframe
     assigned_idx = idx[assigned]  # submatrix cell indices
     assigned_jdx = jdx[assigned]  # submatrix guide indices
-    assigned_counts = np.array(matrix[assigned_idx, assigned_jdx]).flatten()
+    assigned_counts = np.array(
+        matrix[assigned_idx, assigned_jdx], dtype=np.int64
+    ).flatten()
 
     assigned_df = (
         pl.DataFrame(
@@ -295,7 +297,7 @@ def _build_results(
     all_tested_cells = set(range(len(tested_cell_names)))
     assigned_cell_set = set(assigned_idx)
     unassigned_cell_indices = np.array(
-        list(all_tested_cells - assigned_cell_set), dtype=int
+        list(all_tested_cells - assigned_cell_set), dtype=np.int64
     )
 
     unassigned_df = pl.DataFrame(
@@ -315,14 +317,14 @@ def _build_results(
     )
 
     # For untested cells - these keep their original indices
-    untested_indices = np.where(~cell_mask)[0]
+    untested_indices = np.flatnonzero(~cell_mask)
     untested_cell_names = cell_names[~cell_mask]
     untested_n_umis = total_umis[~cell_mask]
 
     missing_df = pl.DataFrame(
         {
             "cell_id": untested_indices,
-            "submatrix_id": np.full(len(untested_cell_names), -1, dtype=int),
+            "submatrix_id": np.full(len(untested_cell_names), -1, dtype=np.int64),
             "cell": untested_cell_names,
             "moi": 0,
             "n_umi": untested_n_umis,
