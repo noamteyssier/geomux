@@ -1,5 +1,6 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+import polars as pl
 
 
 def read_table(filename: str, sep: str = "\t") -> pd.DataFrame:
@@ -20,24 +21,23 @@ def read_table(filename: str, sep: str = "\t") -> pd.DataFrame:
     return matrix
 
 
-def assignment_statistics(assignments: pd.DataFrame) -> dict:
+def assignment_statistics(assignments: pl.DataFrame) -> dict:
     """
     Calculates some statistics about the assignments.
 
     Applies some transformations for easy json encoding
     """
     results = {}
-    results["n_untested"] = int((~assignments["tested"]).sum())
-    results["n_tested"] = int(assignments["tested"].sum())
-    results["n_assigned"] = assignments[
-        (assignments.tested) & (assignments.moi > 0)
-    ].shape[0]
-    results["n_unassigned"] = assignments[
-        (assignments.tested) & (assignments.moi == 0)
-    ].shape[0]
-
+    results["n_untested"] = assignments.filter(pl.col("tested").not_()).height
+    results["n_tested"] = assignments.filter(pl.col("tested")).height
+    results["n_assigned"] = assignments.filter(
+        pl.col("tested") & pl.col("moi") > 0
+    ).height
+    results["n_unassigned"] = assignments.filter(
+        pl.col("tested") & pl.col("moi") == 0
+    ).height
     mois, moi_counts = np.unique(
-        assignments[(assignments.tested) & (assignments.moi > 0)].moi,
+        assignments.filter((pl.col("tested")) & (pl.col("moi") > 0))["moi"].to_numpy(),
         return_counts=True,
     )
 

@@ -230,8 +230,9 @@ def geomux(
     else:
         guide_names = np.arange(matrix.shape[1])  # type: ignore
 
-    assert isinstance(cell_names, np.ndarray)
-    assert isinstance(guide_names, np.ndarray)
+    assert isinstance(cell_names, np.ndarray), "cell_names must be a numpy.ndarray"
+    assert isinstance(guide_names, np.ndarray), "guide_names must be a numpy.ndarray"
+    assert isinstance(matrix, csr_matrix), "matrix must be a scipy.sparse.csr_matrix"
 
     # Filter out cells and guides with insufficient counts
     print("=== Filtering ===")
@@ -246,6 +247,9 @@ def geomux(
     if subtract:
         submatrix.data -= 1
         submatrix.eliminate_zeros()
+
+    if submatrix.size == 0:
+        raise ValueError("No valid cell-guide pairs found")
 
     # Determine hypergeometric parameters for the dataset
     draws = np.array(submatrix.sum(axis=1)).ravel().astype(int)
