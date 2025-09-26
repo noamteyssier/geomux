@@ -26,11 +26,20 @@ def main_cli(
         float, typer.Option(help="Maximum pvalue (fdr) to consider a guide-assignment")
     ] = 0.05,
     lor_threshold: Annotated[
+        float | None,
+        typer.Option(
+            help="Log odds ratio threshold to use (None for adaptive thresholding)",
+        ),
+    ] = None,
+    adaptive_lor_scalar: Annotated[
         float,
         typer.Option(
-            help="Log odds ratio threshold to use",
+            help="Scalar to adaptively set log odds ratio threshold",
         ),
-    ] = 50.0,
+    ] = 0.35,
+    subtract: Annotated[
+        bool, typer.Option(help="Subtract 1 from counts before testing.")
+    ] = True,
     stats: Annotated[
         str | None,
         typer.Option(help="Output file to write assignment statistics to as json"),
@@ -43,6 +52,8 @@ def main_cli(
         min_umi_guides=min_umi_guides,
         fdr_threshold=fdr_threshold,
         lor_threshold=lor_threshold,
+        adaptive_lor_scalar=adaptive_lor_scalar,
+        subtract=subtract,
     )
     results.write_csv(output, separator="\t")
 
