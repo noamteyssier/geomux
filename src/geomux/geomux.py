@@ -17,7 +17,7 @@ def geomux(
     min_umi_guides: int = 10,
     fdr_threshold: float = 0.05,
     lor_threshold: float | None = None,
-    adaptive_lor_scalar: float = 0.4,
+    adaptive_lor_scalar: float | None = None,
     subtract: bool = True,
 ) -> pl.DataFrame:
     if isinstance(matrix, ad.AnnData):
@@ -73,7 +73,7 @@ def _impl_geomux(
     min_umi_guides: int = 10,
     fdr_threshold: float = 0.05,
     lor_threshold: float | None = None,
-    adaptive_lor_scalar: float = 0.4,
+    adaptive_lor_scalar: float | None = None,
     subtract: bool = True,
 ) -> pl.DataFrame:
     assert isinstance(cell_names, np.ndarray), "cell_names must be a numpy.ndarray"
@@ -122,12 +122,7 @@ def _impl_geomux(
     if lor_threshold is None:
         nzmean = np.mean(submatrix.data)
         print(f">> Non-zero mean: {nzmean:.2f}")
-        if nzmean >= NZMEAN_BREAKPOINT:
-            print(f">> Adaptive Scalar: {adaptive_lor_scalar:.2f}")
-            lor_threshold = nzmean * adaptive_lor_scalar
-        else:
-            print(">> Low non-zero mean, overriding adaptive scalar to 0.0")
-            lor_threshold = 0.0
+        lor_threshold = _adaptive_threshold(nzmean, adaptive_lor_scalar)
         print(f">> Adaptive LOR threshold set to: {lor_threshold:.2f}")
     assert lor_threshold is not None, "lor_threshold must be set"
     lor = _lor_adjustment(
@@ -153,6 +148,22 @@ def _impl_geomux(
     )
 
     return results
+
+
+def _adaptive_threshold(
+    nzmean: float,
+    adaptive_lor_scalar: float | None = None,
+) -> float:
+    if nzmean < NZMEAN_BREAKPOINT:
+        return 0.0
+    if adaptive_lor_scalar is not None:
+        return nzmean * adaptive_lor_scalar
+    elif nzmean < 40:
+        return nzmean * 0.2
+    elif nzmean < 100:
+        return nzmean * 0.5
+    else:
+        return nzmean * 0.8
 
 
 def _test(

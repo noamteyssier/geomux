@@ -24,5 +24,6 @@ dev-dependencies = [
     "marimo>=0.14.17",
     "ruff>=0.12.9",
     "pyarrow>=21.0.0",
+    "joblib>=1.5.2",
 ]
 package = true

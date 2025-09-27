@@ -32,11 +32,11 @@ def main_cli(
         ),
     ] = None,
     adaptive_lor_scalar: Annotated[
-        float,
+        float | None,
         typer.Option(
             help="Scalar to adaptively set log odds ratio threshold",
         ),
-    ] = 0.35,
+    ] = None,
     subtract: Annotated[
         bool, typer.Option(help="Subtract 1 from counts before testing.")
     ] = True,
