@@ -61,7 +61,9 @@ def _score_guide(
 ) -> np.ndarray:
     """Returns assigned cells for a given guide"""
     matrix_subset = matrix[:, jdx]
-    if matrix_subset.nnz < 2:
+
+    # return early if no nonzero counts or if number of cells is less than 2
+    if matrix_subset.nnz == 0 or matrix_subset.shape[0] < 2:
         return np.array([], dtype=int)
 
     # isolate counts
