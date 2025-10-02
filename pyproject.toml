@@ -1,6 +1,6 @@
 [project]
 name = "geomux"
-version = "0.5.1"
+version = "0.5.2"
 description = "A tool to assign identifiers to cell barcodes"
 authors = [{ name = "Noam Teyssier" }]
 requires-python = ">=3.10"
