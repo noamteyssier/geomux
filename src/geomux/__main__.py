@@ -69,7 +69,6 @@ def main_cli(
             subtract=subtract,
         )
         results.write_csv(output, separator="\t")
-
         if stats:
             statistics = assignment_statistics(results)
             with open(stats, "w+") as f:
@@ -81,6 +80,10 @@ def main_cli(
             n_jobs=n_jobs,
         )
         results.write_csv(output, separator="\t")
+        if stats:
+            statistics = assignment_statistics(results)
+            with open(stats, "w+") as f:
+                f.write(json.dumps(statistics, indent=2))
     else:
         raise ValueError(f"Invalid method: {method}. Use `geomux` or `mixture`")
 

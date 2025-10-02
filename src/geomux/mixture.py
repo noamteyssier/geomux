@@ -160,8 +160,8 @@ def _impl_mixture(
         .group_by(["cell_id", "cell"])
         .agg(
             pl.col("guide_id").len().alias("moi"),
-            pl.col("guide_id").str.join("|"),
+            pl.col("guide_id").str.join("|").alias("guide_ids_original"),
             pl.col("assignment").str.join("|"),
-            pl.col("umi").str.join("|"),
+            pl.col("umi").str.join("|").alias("umis"),
         )
     )

@@ -9,18 +9,27 @@ def assignment_statistics(assignments: pl.DataFrame) -> dict:
     Applies some transformations for easy json encoding
     """
     results = {}
-    results["n_untested"] = assignments.filter(pl.col("tested").not_()).height
-    results["n_tested"] = assignments.filter(pl.col("tested")).height
-    results["n_assigned"] = assignments.filter(
-        pl.col("tested") & pl.col("moi") > 0
-    ).height
-    results["n_unassigned"] = assignments.filter(
-        pl.col("tested") & pl.col("moi") == 0
-    ).height
-    mois, moi_counts = np.unique(
-        assignments.filter((pl.col("tested")) & (pl.col("moi") > 0))["moi"].to_numpy(),
-        return_counts=True,
-    )
+    if "tested" in assignments.columns:
+        results["n_untested"] = assignments.filter(pl.col("tested").not_()).height
+        results["n_tested"] = assignments.filter(pl.col("tested")).height
+        results["n_assigned"] = assignments.filter(
+            pl.col("tested") & pl.col("moi") > 0
+        ).height
+        results["n_unassigned"] = assignments.filter(
+            pl.col("tested") & pl.col("moi") == 0
+        ).height
+        mois, moi_counts = np.unique(
+            assignments.filter((pl.col("tested")) & (pl.col("moi") > 0))[
+                "moi"
+            ].to_numpy(),
+            return_counts=True,
+        )
+    else:
+        results["n_assigned"] = assignments.filter(pl.col("moi") > 0)
+        mois, moi_counts = np.unique(
+            assignments.filter(pl.col("moi") > 0)["moi"].to_numpy(),
+            return_counts=True,
+        )
 
     # Set default values if no assignments
     if mois.size == 0:
