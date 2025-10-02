@@ -120,6 +120,10 @@ def _process_matrix(
     guide_names: np.ndarray,
     n_jobs: int = -1,
 ) -> pl.DataFrame:
+    # apply a basic filter to skip all single-UMI-cells
+    cell_sums = np.array(matrix.sum(axis=1)).flatten()
+    matrix = matrix[cell_sums > 1]
+
     num_guides = matrix.shape[1]  # type: ignore
 
     # Run in parallel
