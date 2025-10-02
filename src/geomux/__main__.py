@@ -1,13 +1,13 @@
 import json
-import logging
 
 import anndata as ad
-import numpy as np
 import typer
 from typing_extensions import Annotated
 
-from geomux import Geomux, read_table
-from geomux.utils import assignment_statistics
+from geomux.mixture import gaussian_mixture
+
+from . import geomux
+from .utils import assignment_statistics
 
 
 def main_cli(
@@ -17,77 +17,83 @@ def main_cli(
     output: Annotated[
         str, typer.Argument(help="Output file path (tsv) to save assignments.")
     ] = "geomux.tsv",
-    min_umi: Annotated[
+    min_umi_cells: Annotated[
         int, typer.Option(help="Minimum UMI count to consider a barcode")
     ] = 5,
-    min_cells: Annotated[
+    min_umi_guides: Annotated[
         int,
         typer.Option(help="Minimum number of barcodes to consider a guide"),
-    ] = 100,
-    pvalue_threshold: Annotated[
+    ] = 5,
+    fdr_threshold: Annotated[
         float, typer.Option(help="Maximum pvalue (fdr) to consider a guide-assignment")
     ] = 0.05,
     lor_threshold: Annotated[
-        float,
+        float | None,
         typer.Option(
-            help="Log odds ratio threshold to use",
+            help="Log odds ratio threshold to use (None for adaptive thresholding)",
         ),
-    ] = 10.0,
-    n_jobs: Annotated[
-        int,
+    ] = None,
+    adaptive_lor_scalar: Annotated[
+        float | None,
         typer.Option(
-            help="Number of jobs to use when calculating hypergeometric distributions"
+            help="Scalar to adaptively set log odds ratio threshold",
         ),
-    ] = 1,
-    delim: Annotated[
-        str, typer.Option(help="Delimiter to use for multi-value columns in output")
-    ] = "|",
+    ] = None,
+    subtract: Annotated[
+        bool, typer.Option(help="Subtract 1 from counts before testing.")
+    ] = True,
     stats: Annotated[
         str | None,
         typer.Option(help="Output file to write assignment statistics to as json"),
     ] = None,
+    method: Annotated[
+        str, typer.Option(help="Method to use for assignment (geomux/mixture)")
+    ] = "geomux",
+    n_jobs: Annotated[
+        int,
+        typer.Option(
+            help="Number of jobs to use for parallel processing (mixture model only). -1 for all available cores."
+        ),
+    ] = -1,
 ):
-    if input.endswith(".h5ad"):
-        matrix = ad.read_h5ad(input)
-        cell_names = np.array(matrix.obs_names.values)
-        guide_names = np.array(matrix.var_names.values)
+    adata = ad.read_h5ad(input)
+
+    if method == "geomux":
+        results = geomux(
+            adata,
+            min_umi_cells=min_umi_cells,
+            min_umi_guides=min_umi_guides,
+            fdr_threshold=fdr_threshold,
+            lor_threshold=lor_threshold,
+            adaptive_lor_scalar=adaptive_lor_scalar,
+            subtract=subtract,
+        )
+        results.write_csv(output, separator="\t")
+        if stats:
+            statistics = assignment_statistics(results)
+            with open(stats, "w+") as f:
+                f.write(json.dumps(statistics, indent=2))
+    elif method == "mixture":
+        results = gaussian_mixture(
+            adata,
+            min_umi_cells=min_umi_cells,
+            n_jobs=n_jobs,
+        )
+        results.write_csv(output, separator="\t")
+        if stats:
+            statistics = assignment_statistics(results)
+            with open(stats, "w+") as f:
+                f.write(json.dumps(statistics, indent=2))
     else:
-        matrix = read_table(input)
-        cell_names = np.array(matrix.index.values)
-        guide_names = np.array(matrix.columns.values)
-
-    gx = Geomux(
-        matrix,
-        cell_names=cell_names,
-        guide_names=guide_names,
-        min_umi=min_umi,
-        min_cells=min_cells,
-        n_jobs=n_jobs,
-        delimiter=delim,
-    )
-    gx.test()
-    assignments = gx.assignments(
-        pvalue_threshold=pvalue_threshold,
-        lor_threshold=lor_threshold,
-    )
-
-    logging.info(f"Writing assignments to file: {output}")
-    assignments.to_csv(output, sep="\t", index=False)
-
-    # Write the statistics dictionary as json
-    if stats:
-        logging.info(f"Writing assignment statistics to file: {stats}")
-        statistics = assignment_statistics(assignments)
-        with open(stats, "w+") as f:
-            f.write(json.dumps(statistics, indent=2))
+        raise ValueError(f"Invalid method: {method}. Use `geomux` or `mixture`")
 
 
 def _version():
     import sys
 
     if "--version" in sys.argv:
-        from importlib.metadata import version
         import sys
+        from importlib.metadata import version
 
         print(f"geomux {version('geomux')}")
         sys.exit(0)

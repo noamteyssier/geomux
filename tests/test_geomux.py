@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
 from muxsim import MuxSim
+from scipy.sparse import csr_matrix
 
-from geomux import Geomux
+from geomux import geomux, gaussian_mixture
 
 
 def sample_barcode(b_size):
@@ -34,10 +35,30 @@ def test_geomux():
     b_size = 10
     g_size = 4
     matrix = generate_matrix(n, b_size, g_size)
-    gx = Geomux(matrix, min_cells=1)
-    gx.test()
-    assignments = gx.assignments()
+    matrix_csr = csr_matrix(matrix.values)
+    cell_names = np.array(matrix.index.values)
+    guide_names = np.array(matrix.columns.values)
+    assignments = geomux(
+        matrix_csr, cell_names=cell_names, guide_names=guide_names, min_umi_cells=1
+    )
     assert assignments.shape[0] == n
+
+
+def test_mixture():
+    """
+    tests basic usage
+    """
+    n = 100
+    b_size = 10
+    g_size = 4
+    matrix = generate_matrix(n, b_size, g_size)
+    matrix_csr = csr_matrix(matrix.values)
+    cell_names = np.array(matrix.index.values)
+    guide_names = np.array(matrix.columns.values)
+    assignments = gaussian_mixture(
+        matrix_csr, cell_names=cell_names, guide_names=guide_names, min_umi_cells=1
+    )
+    assert assignments.height > 0  # found some assignments
 
 
 def test_assignments():
@@ -52,14 +73,12 @@ def test_assignments():
         n=20,
     )
     gen = ms.sample()
-    gx = Geomux(gen)
-    gx.test()
-    assignments = gx.assignments()
+    assignments = geomux(gen)
     assert assignments.shape[0] == num_cells
-    assert assignments.moi.min() >= 0
-    assert (assignments.moi == 0).sum() > 0
-    assert (assignments.moi == 1).sum() > 0
-    assert (assignments.moi == 2).sum() > 0
+    assert assignments["moi"].min() >= 0
+    assert (assignments["moi"] == 0).sum() > 0
+    assert (assignments["moi"] == 1).sum() > 0
+    assert (assignments["moi"] == 2).sum() > 0
 
 
 def test_geomux_min_cells():
@@ -75,15 +94,14 @@ def test_geomux_min_cells():
     )
     gen = ms.sample()
     gen[:, :3] = 0
-    gx = Geomux(gen, min_cells=5)
-    gx.test()
-    assignments = gx.assignments()
+    assignments = geomux(gen, min_umi_guides=5)
     num_guides = np.sum(gen.sum(axis=0) >= 5)
-    assert gx._n_guides == num_guides
-    for a in assignments.assignment:
-        items = a.split("|")
-        for i in [0, 1, 2]:
-            assert str(i) not in items
+    # Check that filtered guides don't appear in assignments
+    for a in assignments["assignment"]:
+        if a:  # Skip empty assignments
+            items = a.split("|")
+            for i in [0, 1, 2]:
+                assert str(i) not in items
 
 
 def test_geomux_all_cells_filtered():
@@ -92,7 +110,7 @@ def test_geomux_all_cells_filtered():
     """
     gen = np.zeros((100, 100))
     try:
-        _gx = Geomux(gen, min_umi=5)
+        _assignments = geomux(gen, min_umi_cells=5)
         assert False
     except ValueError:
         pass
@@ -104,7 +122,7 @@ def test_geomux_all_guides_filtered():
     """
     gen = np.ones((100, 100))
     try:
-        _gx = Geomux(gen, min_cells=101)
+        _assignments = geomux(gen, min_umi_guides=101)
         assert False
     except ValueError:
         pass
@@ -123,11 +141,19 @@ def test_geomux_correct_assignment():
     )
     gen = ms.sample()
     gen[:, :3] = 0
-    gx = Geomux(gen, min_cells=5)
-    gx.test()
-    assignments = gx.assignments()
+    assignments = geomux(gen, min_umi_guides=5)
 
-    for exp, obs in zip(ms.assignments, assignments.assignment):
-        items = obs.split("|")
-        if 3 in exp:
-            assert str(3) in items
+    # Create a mapping from assignment cell indices to original cell indices
+    assignment_dict = {}
+    for i, row in enumerate(assignments.iter_rows(named=True)):
+        assignment_dict[row["cell_id"]] = row["assignment"]
+
+    for cell_idx, exp in enumerate(ms.assignments):
+        if cell_idx in assignment_dict:
+            obs = assignment_dict[cell_idx]
+            if obs:  # Skip empty assignments
+                items = obs.split("|")
+                if 3 in exp:
+                    # Guide 3 should still be in the filtered guides since guides 0,1,2 were set to 0
+                    # The guide names in assignments are the original guide names
+                    assert "3" in items

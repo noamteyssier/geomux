@@ -1,7 +1,8 @@
-from .geomux import Geomux
-from .utils import read_table, assignment_statistics
+from .geomux import geomux
+from .mixture import gaussian_mixture
+from .utils import assignment_statistics
 
-__all__ = ["Geomux", "read_table", "assignment_statistics"]
+__all__ = ["geomux", "gaussian_mixture", "assignment_statistics"]
 
 import logging
 

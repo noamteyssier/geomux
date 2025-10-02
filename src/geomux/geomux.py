@@ -1,456 +1,377 @@
-import logging
-from multiprocessing import Pool
-from typing import List, Optional, Union
-
 import anndata as ad
 import numpy as np
-import pandas as pd
-from scipy.sparse import csc_matrix, csr_matrix
+import polars as pl
+from scipy.sparse import csr_matrix
 from scipy.special import logit
 from scipy.stats import false_discovery_control, hypergeom
 
-# Sets the maximum probability for p=1 when measuring log-odds
-MAX_PROB = 1 - 1e-10
-BACKUP_DELIMITER = "::"
+MAX_INSIG = 1 - 1e-10
+NZMEAN_BREAKPOINT = 20
 
 
-class Geomux:
-    def __init__(
-        self,
-        matrix: Union[np.ndarray, pd.DataFrame, ad.AnnData],
-        cell_names: Optional[Union[List[str], np.ndarray]] = None,
-        guide_names: Optional[Union[List[str], np.ndarray]] = None,
-        min_umi: int = 5,
-        min_cells: int = 100,
-        n_jobs: int = 4,
-        delimiter: str = "|",
-    ):
-        """
-        Parameters
-        ----------
-        matrix : np.ndarray
-            matrix of cell x guide counts
-        min_umi : int
-            minimum number of UMIs to consider a cell barcode
-        min_cells : int
-            minimum number of cells to consider a guide
-        n_jobs : int
-            number of jobs to use for multiprocessing
-        delimiter: str
-            delimiter used to separate multiple values in output table
-        """
-
-        # Load the matrix
-        if isinstance(matrix, pd.DataFrame):
-            self.matrix = matrix.values
-        elif isinstance(matrix, ad.AnnData):
-            if matrix.X is None:
-                raise ValueError("AnnData object must have a .X attribute")
-            if isinstance(matrix.X, np.ndarray) or isinstance(matrix.X, np.matrix):
-                self.matrix = np.array(matrix.X)
-            elif isinstance(matrix.X, csr_matrix) or isinstance(matrix.X, csc_matrix):
-                self.matrix = np.array(matrix.X.todense())
-            else:
-                raise ValueError(
-                    "AnnData object must have a numpy array or sparse matrix as .X attribute"
-                )
-        else:
-            self.matrix = matrix
-
-        # Load the cell and guide names
+def geomux(
+    matrix: ad.AnnData | csr_matrix | np.ndarray,
+    cell_names: np.ndarray | None = None,
+    guide_names: np.ndarray | None = None,
+    min_umi_cells: int = 5,
+    min_umi_guides: int = 10,
+    fdr_threshold: float = 0.05,
+    lor_threshold: float | None = None,
+    adaptive_lor_scalar: float | None = None,
+    subtract: bool = True,
+) -> pl.DataFrame:
+    if isinstance(matrix, ad.AnnData):
         if cell_names is None:
-            if isinstance(matrix, ad.AnnData):
-                cell_names = np.array(matrix.obs_names)
-            else:
-                cell_names = np.arange(matrix.shape[0])
-        else:
-            assert len(cell_names) == matrix.shape[0]  # type: ignore
-            cell_names = np.array(cell_names)
-
+            cell_names = np.array(matrix.obs.index.values)
         if guide_names is None:
-            if isinstance(matrix, ad.AnnData):
-                guide_names = np.array(matrix.var_names)
-            else:
-                guide_names = np.arange(matrix.shape[1])
-        else:
-            assert len(guide_names) == matrix.shape[1]  # type: ignore
-            guide_names = np.array(guide_names)
-
-        self.cell_names = cell_names
-        self.guide_names = guide_names
-
-        # Set the parameters
-        self.min_umi = min_umi
-        self.min_cells = min_cells
-        self.n_jobs = n_jobs
-        self._n_total = matrix.shape[0]
-        self._m_total = matrix.shape[1]
-        self.delimiter = delimiter
-
-        self._filter_matrix()
-        self._validate_guide_names()
-        self._fit_parameters()
-
-        self._n_cells = self.matrix.shape[0]
-        self._n_guides = self.matrix.shape[1]
-        self._n_tests = self._n_cells * self._n_guides
-
-        self.is_fit = False
-        self.labels = []
-
-    def _filter_matrix(self):
-        """
-        Filters the matrix to only include cells with at least
-        `min_umi` UMIs
-        """
-        logging.info("--- Filtering matrix ---")
-        logging.info(f"Original matrix shape: {self.matrix.shape}")
-
-        cell_sums = self.matrix.sum(axis=1).flatten()
-        guide_sums = self.matrix.sum(axis=0).flatten()
-        self.passing_cells = cell_sums >= self.min_umi
-        self.passing_guides = guide_sums >= self.min_cells
-        self.matrix = self.matrix[self.passing_cells][:, self.passing_guides]
-
-        # Stored for later use
-        self._filtered_counts = cell_sums[~self.passing_cells].copy()
-
-        logging.info(f"Filtered matrix shape: {self.matrix.shape}")
-        logging.info("")
-
-        logging.info("--- Summary statistics ---")
-        logging.info(f"Average number of UMIs per cell: {cell_sums.mean():.2f}")
-        logging.info(f"Variance of UMIs per cell: {cell_sums.var():.2f}")
-        logging.info(
-            f"Cell UMI counts range from {cell_sums.min()} to {cell_sums.max()}"
+            guide_names = np.array(matrix.var.index.values)
+        matrix = csr_matrix(matrix.X)
+    elif isinstance(matrix, np.ndarray):
+        matrix = csr_matrix(matrix)
+    elif not isinstance(matrix, csr_matrix):
+        raise TypeError(
+            "matrix must be an AnnData, numpy.ndarray, or scipy.sparse.csr_matrix"
         )
 
-        logging.info(f"Average number of cells per guide: {guide_sums.mean():.2f}")
-        logging.info(f"Variance of cells per guide: {guide_sums.var():.2f}")
-        logging.info(
-            f"Guide cell counts range from {guide_sums.min()} to {guide_sums.max()}"
-        )
-        logging.info("")
-
-        old_cell_size = self._n_total
-        new_cell_size = self.matrix.shape[0]
-
-        logging.info("--- Filtering Statistics ---")
-        logging.info(
-            "Removed {} ({:.2f}%) cells with < {} UMIs".format(
-                old_cell_size - new_cell_size,
-                100 * (old_cell_size - new_cell_size) / old_cell_size,
-                self.min_umi,
-            )
-        )
-
-        old_guide_size = self._m_total
-        new_guide_size = self.matrix.shape[1]
-        logging.info(
-            "Removed {} ({:.2f}%) guides with < {} Cells".format(
-                old_guide_size - new_guide_size,
-                100 * (old_guide_size - new_guide_size) / old_guide_size,
-                self.min_cells,
-            )
-        )
-        logging.info("")
-
-        if self.matrix.shape[0] == 0:
+    if cell_names is not None:
+        if cell_names.size != matrix.shape[0]:  # type: ignore
             raise ValueError(
-                "No cells passed the UMI threshold. Try lowering the min_umi parameter"
+                f"cell_names (len={cell_names.size}) must have the same length as the number of rows in the matrix ({matrix.shape[0]})"  # type:ignore
             )
-        if self.matrix.shape[1] == 0:
+    else:
+        cell_names = np.arange(matrix.shape[0])  # type: ignore
+    if guide_names is not None:
+        if guide_names.size != matrix.shape[1]:  # type: ignore
             raise ValueError(
-                "No guides passed the cell threshold. Try lowering the min_cells parameter"
+                f"guide_names (len={guide_names.size}) must have the same length as the number of columns in the matrix ({matrix.shape[1]})"  # type:ignore
             )
+    else:
+        guide_names = np.arange(matrix.shape[1])  # type: ignore
 
-    def _validate_guide_names(self):
-        any_conflicts = False
-        for g in self.guide_names:
-            if self.delimiter in str(g):
-                if BACKUP_DELIMITER in str(g):
-                    raise ValueError(
-                        f"Guide: {g} contains restricted characters {self.delimiter} or {BACKUP_DELIMITER}. Please update delimiter to use a character that is not found in your guide names"
-                    )
-                any_conflicts = True
-        if any_conflicts:
-            logging.warning(
-                f"Found a conflicting guide name with `{self.delimiter}`. Updating to delimiter: `{BACKUP_DELIMITER}`"
-            )
-            self.delimiter = BACKUP_DELIMITER
+    assert isinstance(cell_names, np.ndarray), "cell_names must be a numpy.ndarray"
+    assert isinstance(guide_names, np.ndarray), "guide_names must be a numpy.ndarray"
+    assert isinstance(matrix, csr_matrix), "matrix must be a scipy.sparse.csr_matrix"
 
-    def _fit_parameters(self):
-        """
-        Fits the hypergeometric distribution parameters
-        """
-        self.population = self.matrix.sum()
-        self.successes = self.matrix.sum(axis=0)
-        self.draws = self.matrix.sum(axis=1)
+    return _impl_geomux(
+        matrix,
+        cell_names=cell_names,
+        guide_names=guide_names,
+        min_umi_cells=min_umi_cells,
+        min_umi_guides=min_umi_guides,
+        fdr_threshold=fdr_threshold,
+        lor_threshold=lor_threshold,
+        adaptive_lor_scalar=adaptive_lor_scalar,
+        subtract=subtract,
+    )
 
-    def _hypergeometric_test(self, x: np.ndarray, idx: int):
-        """
-        Calculates the survival function of a hypergeometric
-        distribution for each cell x guide pair.
 
-        Parameters
-        ----------
-        x : np.ndarray
-            vector of guide counts for a single cell
-        idx : int
-            index of the cell in the matrix
-        """
-        return hypergeom.sf(x - 1, self.population, self.successes, self.draws[idx])
+def _impl_geomux(
+    matrix: csr_matrix,
+    cell_names: np.ndarray,
+    guide_names: np.ndarray,
+    min_umi_cells: int = 5,
+    min_umi_guides: int = 10,
+    fdr_threshold: float = 0.05,
+    lor_threshold: float | None = None,
+    adaptive_lor_scalar: float | None = None,
+    subtract: bool = True,
+) -> pl.DataFrame:
+    assert isinstance(cell_names, np.ndarray), "cell_names must be a numpy.ndarray"
+    assert isinstance(guide_names, np.ndarray), "guide_names must be a numpy.ndarray"
+    assert isinstance(matrix, csr_matrix), "matrix must be a scipy.sparse.csr_matrix"
 
-    def _adjust_pvalues(self, pvalues: np.ndarray):
-        """
-        Adjust pvalues using the Bonferroni correction
-        """
-        adj_pvalues = false_discovery_control(pvalues, method="bh")
-        adj_pvalues = np.clip(adj_pvalues, np.min(adj_pvalues[adj_pvalues != 0]), 1)
-        return adj_pvalues.reshape(pvalues.shape)
+    # Filter out cells and guides with insufficient counts
+    print("=== Filtering ===")
+    cell_sums = np.array(matrix.sum(axis=1)).ravel().astype(int)
+    guide_sums = np.array(matrix.sum(axis=0)).ravel().astype(int)
 
-    def test(self):
-        """
-        Performs cell x guide geometric testing
-        """
-        logging.info("--- Hypergeometric Testing ---")
-        logging.info(f"Number of cells to test: {self._n_cells}")
-        with Pool(self.n_jobs) as p:
-            pv_mat = np.vstack(
-                p.starmap(
-                    self._hypergeometric_test,
-                    zip(self.matrix, np.arange(self._n_cells)),
-                )
-            )
-        logging.info("")
+    cell_mask = cell_sums >= min_umi_cells
+    guide_mask = guide_sums >= min_umi_guides
 
-        pv_mat = np.clip(pv_mat, np.min(pv_mat[pv_mat != 0]), 1)
+    # Determine the relevant submatrix
+    submatrix = matrix[cell_mask][:, guide_mask]
+    if subtract:
+        submatrix.data -= 1
+        submatrix.eliminate_zeros()
 
-        logging.info("--- P-value Adjustment ---")
-        self.pv_mat = self._adjust_pvalues(pv_mat)
-        logging.info("")
+    if submatrix.size == 0:
+        raise ValueError("No valid cell-guide pairs found")
 
-        self.is_fit = True
+    # Determine hypergeometric parameters for the dataset
+    draws = np.array(submatrix.sum(axis=1)).ravel().astype(int)
+    successes = np.array(submatrix.sum(axis=0)).ravel().astype(int)
+    population = submatrix.sum()
 
-    def _generate_assignments(self, threshold=0.05):
-        if not self.is_fit:
-            AttributeError("Please run `.test()` method first")
+    print(f">> Number of testable cells: {cell_mask.sum()}")
+    print(f">> Number of testable guides: {guide_mask.sum()}")
+    print(f">> Mean cell UMI: {draws.mean():.2f}")
+    print(f">> Mean guide UMI: {successes.mean():.2f}")
+    print(f">> Total UMIs: {population}")
 
-        logging.info("--- P-Value Thresholding ---")
-        self._assignment_matrix = self.pv_mat < threshold
+    # Calculate hypergeometric statistics
+    print("=== Hypergeometric Test ===")
+    idx, jdx = submatrix.nonzero()
+    pvalues, fdr = _test(submatrix, idx, jdx, draws, successes, population)
 
-        self._n_assigned = np.sum(self._assignment_matrix.sum(axis=1) > 0)
-        logging.info(f"{self._n_assigned} cells assigned to guides")
-        logging.info("")
+    # Determine the initially assigned significant set
+    assigned = fdr <= fdr_threshold
+    print(f">> Initially assigned cell-guide pairs: {assigned.sum()}")
 
-        self._is_assigned = True
+    # Correct assignments based on log odds ratio
+    print("=== Log Odds Ratio Adjustment ===")
+    if lor_threshold is None:
+        nzmean = np.mean(submatrix.data)
+        print(f">> Non-zero mean: {nzmean:.2f}")
+        lor_threshold = _adaptive_threshold(nzmean, adaptive_lor_scalar)
+        print(f">> Adaptive LOR threshold set to: {lor_threshold:.2f}")
+    assert lor_threshold is not None, "lor_threshold must be set"
+    lor = _lor_adjustment(
+        assigned=assigned,
+        fdr=fdr,
+        idx=idx,
+        lor_threshold=lor_threshold,
+    )
+    print(f">> Final assigned cell-guide pairs: {assigned.sum()}")
 
-    def _calculate_log_odds(self, lor_threshold: float):
-        """
-        calculates log-odds of each significant guide compared to the next
-        most insignificant guide
+    results = _build_results(
+        matrix=submatrix,
+        idx=idx,
+        jdx=jdx,
+        cell_names=cell_names,
+        cell_mask=cell_mask,
+        guide_names=guide_names,
+        guide_mask=guide_mask,
+        total_umis=cell_sums,
+        assigned=assigned,
+        fdrs=fdr,
+        lors=lor,
+    )
 
-        This is done in a dynamic pattern, where the most significant guide
-        is compared to the next-most insignificant guide. If the log-odds
-        is greater than the threshold, the guide is kept. Otherwise, the
-        guide is removed from the assignment matrix and it will be included
-        in the next comparison.
+    return results
 
-        Parameters
-        ----------
-        lor_threshold : float
-            log-odds threshold for guide inclusion (LOR must be greater than this)
-        """
-        if not self._is_assigned:
-            raise AttributeError("Must assign guides first")
 
-        logging.info("--- Log Odds Calculation ---")
+def _adaptive_threshold(
+    nzmean: float,
+    adaptive_lor_scalar: float | None = None,
+) -> float:
+    if nzmean < NZMEAN_BREAKPOINT:
+        return 0.0
+    if adaptive_lor_scalar is not None:
+        return nzmean * adaptive_lor_scalar
+    elif nzmean < 40:
+        return nzmean * 0.2
+    elif nzmean < 100:
+        return nzmean * 0.5
+    else:
+        return nzmean * 0.8
 
-        # instantiate the log odds matrix
-        self.lor_matrix = np.zeros((self._n_cells, self._n_guides))
 
-        # calculate the log odds for each cell
-        for i in np.arange(self._n_cells):
-            # select the significant guides
-            sig_idx = np.flatnonzero(self._assignment_matrix[i])
+def _test(
+    matrix: csr_matrix,
+    idx: np.ndarray,
+    jdx: np.ndarray,
+    draws: np.ndarray,
+    successes: np.ndarray,
+    population: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    # non-zero values
+    values = matrix[idx, jdx]
 
-            # Sort the indices by pvalue (descending)
-            sort_idx = np.argsort(self.pv_mat[i, sig_idx])[::-1]
+    k = values - 1
+    M = population
+    n = successes[jdx]
+    N = draws[idx]
 
-            # sort the significant guides by pvalue (descending)
-            sig_idx = sig_idx[sort_idx]
+    pvalues = hypergeom.sf(k, M, n, N).flatten()
+    pvalues = np.clip(
+        pvalues,
+        np.min(pvalues[pvalues > 0]),  # set zeros to minimum nonzero p-value
+        1.0,  # clip to 1.0 just in case
+    )
 
-            for j in sig_idx:
-                # find the next most significant insignificant guide
-                min_insig = self.pv_mat[i][~self._assignment_matrix[i]].min()
+    return pvalues, false_discovery_control(pvalues, method="bh")
 
-                # sets the max probability in case of p=1
-                min_insig = min(min_insig, MAX_PROB)
 
-                # calculate the log odds
-                lor = logit(min_insig) - logit(self.pv_mat[i, j])
+def _atomic_lor_correction(
+    lbound: int,
+    rbound: int,
+    fdr: np.ndarray,
+    assigned: np.ndarray,
+    lors: np.ndarray,
+    lor_threshold: float,
+    max_insig: float = MAX_INSIG,
+):
+    """Determine whether the LOR is significant over the threshold.
 
-                # if the log odds is greater than the threshold, keep the guide
-                # otherwise, remove the guide from the assignment matrix
-                if lor > lor_threshold:
-                    self.lor_matrix[i, j] = lor
-                else:
-                    self._assignment_matrix[i, j] = False
+    Notably this will update `assigned` and `lors` arrays **inplace**.
+    """
+    sub_fdr = fdr[lbound:rbound]
+    sub_assigned = assigned[lbound:rbound]
+    sub_lors = lors[lbound:rbound]
 
-        self._n_assigned = np.sum(self._assignment_matrix.sum(axis=1) > 0)
-        logging.info(f"{self._n_assigned} cells assigned to guides")
-        logging.info("")
-        self._is_lor_calculated = True
+    # Skip full insignificant sets
+    if not np.any(sub_assigned):
+        return
 
-    def _generate_labels(self):
-        if not self._is_assigned:
-            raise AttributeError("Must assign guides first")
-        if not self._is_lor_calculated:
-            raise AttributeError("Must calculate log odds first")
+    # Set the initial minimum insignificant FDR
+    if np.all(sub_assigned):
+        min_insig = max_insig
+    else:
+        min_insig = min(np.min(sub_fdr[~sub_assigned]), max_insig)
 
-        guide_indices = np.arange(self._m_total)
-        guide_mask = guide_indices[self.passing_guides]
+    # Sort the FDR in descending order (most insignificant first)
+    sort_idx = np.argsort(sub_fdr)[::-1]
 
-        self.labels = []
-        for i in np.arange(self._n_cells):
-            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
-            guide_names = self.delimiter.join(
-                [str(x) for x in self.guide_names[guide_mask[assignment_indices]]]
-            )
-            self.labels.append(guide_names)
+    # Iterate over the sorted FDR values
+    for s in sort_idx:
+        # skip insignificant
+        if not sub_assigned[s]:
+            continue
 
-    def _select_counts(self):
-        if not self._is_assigned:
-            raise AttributeError("Must assign guides first")
-        if not self._is_lor_calculated:
-            raise AttributeError("Must calculate log odds first")
+        # Calculate the LOR
+        s_fdr = sub_fdr[s]
+        sub_lors[s] = logit(min_insig) - logit(s_fdr)
 
-        self.counts = []
-        for i in np.arange(self._n_cells):
-            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
-            counts = self.delimiter.join(
-                [str(int(x)) for x in self.matrix[i][assignment_indices]]
-            )
-            self.counts.append(counts)
+        # Reset the minimum insignificant FDR if the LOR is insignificant
+        if sub_lors[s] < lor_threshold:
+            sub_assigned[s] = False
+            min_insig = min(s_fdr, max_insig)
 
-    def _select_pvalues(self):
-        if not self._is_assigned:
-            raise AttributeError("Must assign guides first")
-        if not self._is_lor_calculated:
-            raise AttributeError("Must calculate log odds first")
 
-        self.pvalues = []
-        for i in np.arange(self._n_cells):
-            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
-            pvalues = self.delimiter.join(
-                [str(x) for x in self.pv_mat[i][assignment_indices]]
-            )
-            self.pvalues.append(pvalues)
+def _lor_adjustment(
+    assigned: np.ndarray,
+    fdr: np.ndarray,
+    idx: np.ndarray,
+    lor_threshold: float,
+) -> np.ndarray:
+    step_changes = np.concatenate((np.flatnonzero(np.diff(idx) != 0) + 1, [idx.size]))
+    lors = np.zeros_like(fdr)
 
-    def _select_log_odds(self):
-        if not self._is_assigned:
-            raise AttributeError("Must assign guides first")
-        if not self._is_lor_calculated:
-            raise AttributeError("Must calculate log odds first")
-
-        self.log_odds = []
-        for i in np.arange(self._n_cells):
-            assignment_indices = np.flatnonzero(self._assignment_matrix[i])
-            log_odds = self.delimiter.join(
-                [str(x) for x in self.lor_matrix[i][assignment_indices]]
-            )
-            self.log_odds.append(log_odds)
-
-    def _calculate_moi(self):
-        if not self._is_assigned:
-            raise AttributeError("Must assign guides first")
-        if not self._is_lor_calculated:
-            raise AttributeError("Must calculate log odds first")
-
-        self.moi = np.sum(self._assignment_matrix, axis=1)
-
-    def _filter_significant(
-        self,
-        pvalue_threshold: float = 0.05,
-        lor_threshold: float = 10.0,
-    ):
-        """
-        Calculates the MOI for each cell
-
-        Parameters
-        ----------
-        pvalue_threshold : float
-            pvalue threshold for significance (used on the adjusted pvalues)
-        lor_threshold : float
-            log odds ratio threshold for significance
-        """
-        self._generate_assignments(pvalue_threshold)
-        self._calculate_log_odds(lor_threshold)
-        self._generate_labels()
-        self._select_counts()
-        self._select_pvalues()
-        self._select_log_odds()
-        self._calculate_moi()
-
-    def _assemble_dataframe(self):
-        """
-        Assemble the assignment results into a dataframe
-
-        Returns
-        -------
-        df : pd.DataFrame
-            dataframe with assignment results and calculated metrics
-        """
-        cell_id_in = np.arange(self._n_total)[self.passing_cells]
-        cell_id_out = np.arange(self._n_total)[~self.passing_cells]
-
-        cell_name_in = self.cell_names[self.passing_cells]  # type: ignore
-        cell_name_out = self.cell_names[~self.passing_cells]  # type: ignore
-
-        frame = pd.DataFrame(
-            {
-                "cell_id": cell_name_in,
-                "assignment": self.labels,
-                "counts": self.counts,
-                "pvalues": self.pvalues,
-                "log_odds": self.log_odds,
-                "moi": self.moi,
-                "n_umi": self.draws,
-                "min_pvalue": self.pv_mat.min(axis=1),
-                "max_count": self.matrix.max(axis=1),
-                "tested": True,
-            },
-            index=cell_id_in,
+    lbound = 0
+    for rbound in step_changes:
+        _atomic_lor_correction(
+            lbound=lbound,
+            rbound=rbound,
+            fdr=fdr,
+            assigned=assigned,
+            lors=lors,
+            lor_threshold=lor_threshold,
+            max_insig=fdr.mean(),
         )
-        null = pd.DataFrame(
-            {
-                "cell_id": cell_name_out,
-                "assignment": "",
-                "counts": "",
-                "pvalues": "",
-                "log_odds": "",
-                "moi": 0,
-                "n_umi": self._filtered_counts,
-                "min_pvalue": np.nan,
-                "max_count": np.nan,
-                "tested": False,
-            },
-            index=cell_id_out,
+        lbound = rbound
+
+    return lors
+
+
+def _build_results(
+    matrix: csr_matrix,
+    idx: np.ndarray,
+    jdx: np.ndarray,
+    cell_names: np.ndarray,
+    cell_mask: np.ndarray,
+    guide_names: np.ndarray,
+    guide_mask: np.ndarray,
+    total_umis: np.ndarray,
+    assigned: np.ndarray,
+    fdrs: np.ndarray,
+    lors: np.ndarray,
+) -> pl.DataFrame:
+    # Get tested cell info and original indices
+    tested_cell_names = cell_names[cell_mask]
+    tested_n_umis = total_umis[cell_mask]
+
+    # Create mapping from submatrix indices to original indices
+    original_cell_indices = np.flatnonzero(cell_mask)
+    original_guide_indices = np.flatnonzero(guide_mask)
+
+    if np.any(assigned):
+        # Build assigned dataframe
+        assigned_idx = idx[assigned]  # submatrix cell indices
+        assigned_jdx = jdx[assigned]  # submatrix guide indices
+        assigned_counts = np.array(
+            matrix[assigned_idx, assigned_jdx], dtype=np.int64
+        ).flatten()
+
+        assigned_df = (
+            pl.DataFrame(
+                {
+                    "cell_id": original_cell_indices[assigned_idx],
+                    "submatrix_id": assigned_idx,
+                    "cell": tested_cell_names[assigned_idx],
+                    "guide_id_submatrix": assigned_jdx,
+                    "guide_id_original": original_guide_indices[assigned_jdx],
+                    "assignment": guide_names[guide_mask][assigned_jdx],
+                    "umis": assigned_counts.astype(str),
+                    "fdr": fdrs[assigned].astype(str),
+                    "log_odds": lors[assigned].astype(str),
+                    "n_umi": tested_n_umis[assigned_idx],
+                }
+            )
+            .group_by(["cell_id", "submatrix_id", "cell"])
+            .agg(
+                pl.col("assignment").len().alias("moi"),
+                pl.col("n_umi").max(),
+                pl.col("assignment").str.join("|"),
+                pl.col("guide_id_original").str.join("|").alias("guide_ids_original"),
+                pl.col("umis").str.join("|"),
+                pl.col("fdr").str.join("|"),
+                pl.col("log_odds").str.join("|"),
+            )
+            .with_columns(pl.lit(True).alias("tested"))
         )
-        return pd.concat([frame, null.astype(frame.dtypes)]).sort_index()
+    else:
+        assigned_df = pl.DataFrame()
 
-    def assignments(
-        self, pvalue_threshold: float = 0.05, lor_threshold: float = 10.0
-    ) -> pd.DataFrame:
-        """
-        Returns a dataframe for all assignments with significance thresholds
+    # For unassigned cells
+    all_tested_cells = set(range(len(tested_cell_names)))
+    if np.any(assigned):
+        assigned_cell_set = set(assigned_idx)
+    else:
+        assigned_cell_set = set()
+    unassigned_cell_indices = np.array(
+        list(all_tested_cells - assigned_cell_set), dtype=np.int64
+    )
 
-        Parameters
-        ----------
-        pvalue_threshold : float
-            pvalue threshold for significance (used on the adjusted pvalues)
-        lor_threshold : float
-            log odds ratio threshold for significance
-        """
-        self._filter_significant(pvalue_threshold, lor_threshold)
-        return self._assemble_dataframe()
+    unassigned_df = pl.DataFrame(
+        {
+            "cell_id": original_cell_indices[unassigned_cell_indices],
+            "submatrix_id": unassigned_cell_indices,
+            "cell": tested_cell_names[unassigned_cell_indices],
+            "moi": 0,
+            "n_umi": tested_n_umis[unassigned_cell_indices],
+            "assignment": "",
+            "guide_ids_original": "",
+            "umis": "",
+            "fdr": "",
+            "log_odds": "",
+            "tested": True,
+        }
+    )
+
+    # For untested cells - these keep their original indices
+    untested_indices = np.flatnonzero(~cell_mask)
+    untested_cell_names = cell_names[~cell_mask]
+    untested_n_umis = total_umis[~cell_mask]
+
+    missing_df = pl.DataFrame(
+        {
+            "cell_id": untested_indices,
+            "submatrix_id": np.full(len(untested_cell_names), -1, dtype=np.int64),
+            "cell": untested_cell_names,
+            "moi": 0,
+            "n_umi": untested_n_umis,
+            "assignment": "",
+            "guide_ids_original": "",
+            "umis": "",
+            "fdr": "",
+            "log_odds": "",
+            "tested": False,
+        }
+    )
+
+    if assigned_df.is_empty():
+        return pl.concat([unassigned_df, missing_df], how="vertical_relaxed")
+    else:
+        return pl.concat(
+            [assigned_df, unassigned_df, missing_df], how="vertical_relaxed"
+        )
