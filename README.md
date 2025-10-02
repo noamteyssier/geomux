@@ -59,31 +59,27 @@ You can also run the help flag to see the help menu for parameter options.
 
 ```python
 import anndata as ad
-from geomux import Geomux
+from geomux import geomux
 
 input = "filename.h5ad"
 
 adata = ad.read_h5ad(input)
-gx = Geomux(adata)
-gx.test()
-assignments = gx.assignments
+assignments = geomux(adata)
+print(assignments)
 ```
 
-#### Processing a 3-column TSV of [barcode, guide, n_umi]
+#### Processing an gene x guide sparse matrix
 
 ```python
-from geomux import Geomux, read_table
+import anndata as ad
+from geomux import geomux
 
-input = "filename.tsv"
+input = "filename.h5ad"
 
-matrix = read_table(input)
-gx = Geomux(
-    matrix,
-    cell_names=matrix.index.values,
-    guide_names=matrix.columns.values,
-)
-gx.test()
-assignments = gx.assignments()
+adata = ad.read_h5ad(input)
+matrix = adata.X.tocsr()
+assignments = geomux(matrix)
+print(assignments)
 ```
 
 ## Outputs
