@@ -3,7 +3,7 @@ import pandas as pd
 from muxsim import MuxSim
 from scipy.sparse import csr_matrix
 
-from geomux import geomux
+from geomux import geomux, gaussian_mixture
 
 
 def sample_barcode(b_size):
@@ -42,6 +42,23 @@ def test_geomux():
         matrix_csr, cell_names=cell_names, guide_names=guide_names, min_umi_cells=1
     )
     assert assignments.shape[0] == n
+
+
+def test_mixture():
+    """
+    tests basic usage
+    """
+    n = 100
+    b_size = 10
+    g_size = 4
+    matrix = generate_matrix(n, b_size, g_size)
+    matrix_csr = csr_matrix(matrix.values)
+    cell_names = np.array(matrix.index.values)
+    guide_names = np.array(matrix.columns.values)
+    assignments = gaussian_mixture(
+        matrix_csr, cell_names=cell_names, guide_names=guide_names, min_umi_cells=1
+    )
+    assert assignments.height > 0  # found some assignments
 
 
 def test_assignments():
