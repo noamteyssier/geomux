@@ -19,6 +19,13 @@ geomux --help
 
 Geomux can be used either as a commandline tool or as a python module
 
+Geomux supports two modes of operation:
+
+1. Hypergeometric testing
+2. Gaussian Mixture Model testing
+
+This can be set with the `--method` flag on the CLI or by using the relevant function (`geomux` or `gaussian_mixture`)
+
 ### Commandline
 
 when installing via `uv`, an executable will be placed in your bin path. So you can call it directly from wherever in your filesystem
@@ -59,13 +66,17 @@ You can also run the help flag to see the help menu for parameter options.
 
 ```python
 import anndata as ad
-from geomux import geomux
+from geomux import geomux, gaussian_mixture
 
 input = "filename.h5ad"
 
 adata = ad.read_h5ad(input)
-assignments = geomux(adata)
-print(assignments)
+
+assignments_geomux = geomux(adata)
+print(assignments_geomux)
+
+assignments_mixture = gaussian_mixture(adata)
+print(assignments_mixture)
 ```
 
 #### Processing an gene x guide sparse matrix
