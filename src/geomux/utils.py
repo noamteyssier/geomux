@@ -25,7 +25,7 @@ def assignment_statistics(assignments: pl.DataFrame) -> dict:
             return_counts=True,
         )
     else:
-        results["n_assigned"] = assignments.filter(pl.col("moi") > 0)
+        results["n_assigned"] = assignments.filter(pl.col("moi") > 0).height
         mois, moi_counts = np.unique(
             assignments.filter(pl.col("moi") > 0)["moi"].to_numpy(),
             return_counts=True,
