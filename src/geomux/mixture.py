@@ -4,6 +4,7 @@ import polars as pl
 from joblib import Parallel, delayed
 from scipy.sparse import csr_matrix
 from sklearn import mixture
+from threadpoolctl import threadpool_limits
 
 
 def gaussian_mixture(
@@ -127,16 +128,17 @@ def _process_matrix(
     num_guides = matrix.shape[1]  # type: ignore
 
     # Run in parallel
-    assignments = Parallel(n_jobs=n_jobs, verbose=10)(
-        delayed(_process_guide)(
-            matrix=matrix,
-            jdx=jdx,
-            min_umi_threshold=min_umi_threshold,
-            cell_names=cell_names,
-            guide_names=guide_names,
+    with threadpool_limits(limits=1):
+        assignments = Parallel(n_jobs=n_jobs, verbose=10)(
+            delayed(_process_guide)(
+                matrix=matrix,
+                jdx=jdx,
+                min_umi_threshold=min_umi_threshold,
+                cell_names=cell_names,
+                guide_names=guide_names,
+            )
+            for jdx in range(num_guides)
         )
-        for jdx in range(num_guides)
-    )
 
     assignments = pl.concat(
         [df for df in assignments if not df.is_empty()],  # type: ignore
