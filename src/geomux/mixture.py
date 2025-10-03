@@ -123,12 +123,6 @@ def _process_matrix(
     guide_names: np.ndarray,
     n_jobs: int = -1,
 ) -> pl.DataFrame:
-    # apply a basic filter to skip all low-UMI-cells
-    cell_sums = np.array(matrix.sum(axis=1)).flatten()
-    matrix = matrix[cell_sums >= min_umi_threshold]
-    matrix = csc_matrix(matrix, copy=True)
-    matrix.eliminate_zeros()
-
     num_guides = matrix.shape[1]  # type: ignore
 
     # Run in parallel
