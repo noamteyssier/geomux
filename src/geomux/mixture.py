@@ -2,13 +2,13 @@ import anndata as ad
 import numpy as np
 import polars as pl
 from joblib import Parallel, delayed
-from scipy.sparse import csr_matrix
+from scipy.sparse import csc_matrix, csr_matrix
 from sklearn import mixture
 from threadpoolctl import threadpool_limits
 
 
 def gaussian_mixture(
-    matrix: ad.AnnData | np.ndarray | csr_matrix,
+    matrix: ad.AnnData | np.ndarray | csr_matrix | csc_matrix,
     cell_names: np.ndarray | None = None,
     guide_names: np.ndarray | None = None,
     min_umi_cells: int = 3,
@@ -19,12 +19,14 @@ def gaussian_mixture(
             cell_names = np.array(matrix.obs.index.values)
         if guide_names is None:
             guide_names = np.array(matrix.var.index.values)
-        matrix = csr_matrix(matrix.X)
+        matrix = csc_matrix(matrix.X, copy=True)
     elif isinstance(matrix, np.ndarray):
-        matrix = csr_matrix(matrix)
-    elif not isinstance(matrix, csr_matrix):
+        matrix = csc_matrix(matrix)
+    elif isinstance(matrix, csr_matrix):
+        matrix = csc_matrix(matrix, copy=True)
+    elif not isinstance(matrix, csc_matrix):
         raise TypeError(
-            "matrix must be an AnnData, numpy.ndarray, or scipy.sparse.csr_matrix"
+            "matrix must be an AnnData, numpy.ndarray, or scipy.sparse.csc_matrix"
         )
 
     if cell_names is not None:
@@ -44,7 +46,7 @@ def gaussian_mixture(
 
     assert isinstance(cell_names, np.ndarray), "cell_names must be a numpy.ndarray"
     assert isinstance(guide_names, np.ndarray), "guide_names must be a numpy.ndarray"
-    assert isinstance(matrix, csr_matrix), "matrix must be a scipy.sparse.csr_matrix"
+    assert isinstance(matrix, csc_matrix), "matrix must be a scipy.sparse.csc_matrix"
 
     return _impl_mixture(
         matrix,
@@ -56,7 +58,7 @@ def gaussian_mixture(
 
 
 def _score_guide(
-    matrix: csr_matrix,
+    matrix: csc_matrix,
     jdx: int,
     min_umi_threshold: int,
 ) -> np.ndarray:
@@ -91,7 +93,7 @@ def _score_guide(
 
 
 def _process_guide(
-    matrix: csr_matrix,
+    matrix: csc_matrix,
     jdx: int,
     min_umi_threshold: int,
     cell_names: np.ndarray,
@@ -115,15 +117,17 @@ def _process_guide(
 
 
 def _process_matrix(
-    matrix: csr_matrix,
+    matrix: csc_matrix,
     min_umi_threshold: int,
     cell_names: np.ndarray,
     guide_names: np.ndarray,
     n_jobs: int = -1,
 ) -> pl.DataFrame:
-    # apply a basic filter to skip all single-UMI-cells
+    # apply a basic filter to skip all low-UMI-cells
     cell_sums = np.array(matrix.sum(axis=1)).flatten()
-    matrix = matrix[cell_sums > 1]
+    matrix = matrix[cell_sums >= min_umi_threshold]
+    matrix = csc_matrix(matrix, copy=True)
+    matrix.eliminate_zeros()
 
     num_guides = matrix.shape[1]  # type: ignore
 
@@ -149,7 +153,7 @@ def _process_matrix(
 
 
 def _impl_mixture(
-    matrix: csr_matrix,
+    matrix: csc_matrix,
     cell_names: np.ndarray,
     guide_names: np.ndarray,
     min_umi_cells: int = 3,
