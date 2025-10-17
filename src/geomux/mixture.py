@@ -138,10 +138,21 @@ def _process_matrix(
             for jdx in range(num_guides)
         )
 
-    assignments = pl.concat(
-        [df for df in assignments if not df.is_empty()],  # type: ignore
-        how="vertical_relaxed",
-    )
+    try:
+        assignments = pl.concat(
+            [df for df in assignments if not df.is_empty()],  # type: ignore
+            how="vertical_relaxed",
+        )
+    except ValueError:
+        assignments = pl.DataFrame(
+            {
+                "cell_id": [],
+                "cell": [],
+                "guide_id": [],
+                "assignment": [],
+                "umi": [],
+            }
+        )
 
     return assignments
 
