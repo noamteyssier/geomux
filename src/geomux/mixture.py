@@ -30,19 +30,19 @@ def gaussian_mixture(
         )
 
     if cell_names is not None:
-        if cell_names.size != matrix.shape[0]:  # type: ignore
+        if cell_names.size != matrix.shape[0]:
             raise ValueError(
-                f"cell_names (len={cell_names.size}) must have the same length as the number of rows in the matrix ({matrix.shape[0]})"  # type:ignore
+                f"cell_names (len={cell_names.size}) must have the same length as the number of rows in the matrix ({matrix.shape[0]})"
             )
     else:
-        cell_names = np.arange(matrix.shape[0])  # type: ignore
+        cell_names = np.arange(matrix.shape[0])
     if guide_names is not None:
-        if guide_names.size != matrix.shape[1]:  # type: ignore
+        if guide_names.size != matrix.shape[1]:
             raise ValueError(
-                f"guide_names (len={guide_names.size}) must have the same length as the number of columns in the matrix ({matrix.shape[1]})"  # type:ignore
+                f"guide_names (len={guide_names.size}) must have the same length as the number of columns in the matrix ({matrix.shape[1]})"
             )
     else:
-        guide_names = np.arange(matrix.shape[1])  # type: ignore
+        guide_names = np.arange(matrix.shape[1])
 
     assert isinstance(cell_names, np.ndarray), "cell_names must be a numpy.ndarray"
     assert isinstance(guide_names, np.ndarray), "guide_names must be a numpy.ndarray"
@@ -123,7 +123,7 @@ def _process_matrix(
     guide_names: np.ndarray,
     n_jobs: int = -1,
 ) -> pl.DataFrame:
-    num_guides = matrix.shape[1]  # type: ignore
+    num_guides = matrix.shape[1]
 
     # Run in parallel
     with threadpool_limits(limits=1):
@@ -140,7 +140,7 @@ def _process_matrix(
 
     try:
         assignments = pl.concat(
-            [df for df in assignments if not df.is_empty()],  # type: ignore
+            [df for df in assignments if not df.is_empty()],
             how="vertical_relaxed",
         )
     except ValueError:

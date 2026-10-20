@@ -34,19 +34,19 @@ def geomux(
         )
 
     if cell_names is not None:
-        if cell_names.size != matrix.shape[0]:  # type: ignore
+        if cell_names.size != matrix.shape[0]:
             raise ValueError(
-                f"cell_names (len={cell_names.size}) must have the same length as the number of rows in the matrix ({matrix.shape[0]})"  # type:ignore
+                f"cell_names (len={cell_names.size}) must have the same length as the number of rows in the matrix ({matrix.shape[0]})"
             )
     else:
-        cell_names = np.arange(matrix.shape[0])  # type: ignore
+        cell_names = np.arange(matrix.shape[0])
     if guide_names is not None:
-        if guide_names.size != matrix.shape[1]:  # type: ignore
+        if guide_names.size != matrix.shape[1]:
             raise ValueError(
-                f"guide_names (len={guide_names.size}) must have the same length as the number of columns in the matrix ({matrix.shape[1]})"  # type:ignore
+                f"guide_names (len={guide_names.size}) must have the same length as the number of columns in the matrix ({matrix.shape[1]})"
             )
     else:
-        guide_names = np.arange(matrix.shape[1])  # type: ignore
+        guide_names = np.arange(matrix.shape[1])
 
     assert isinstance(cell_names, np.ndarray), "cell_names must be a numpy.ndarray"
     assert isinstance(guide_names, np.ndarray), "guide_names must be a numpy.ndarray"
@@ -111,7 +111,7 @@ def _impl_geomux(
     # Calculate hypergeometric statistics
     print("=== Hypergeometric Test ===")
     idx, jdx = submatrix.nonzero()
-    pvalues, fdr = _test(submatrix, idx, jdx, draws, successes, population)
+    _pvalues, fdr = _test(submatrix, idx, jdx, draws, successes, population)
 
     # Determine the initially assigned significant set
     assigned = fdr <= fdr_threshold
