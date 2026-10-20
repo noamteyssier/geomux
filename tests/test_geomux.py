@@ -75,7 +75,7 @@ def test_assignments():
     gen = ms.sample()
     assignments = geomux(gen)
     assert assignments.shape[0] == num_cells
-    assert assignments["moi"].min() >= 0
+    assert (assignments["moi"] >= 0).all()
     assert (assignments["moi"] == 0).sum() > 0
     assert (assignments["moi"] == 1).sum() > 0
     assert (assignments["moi"] == 2).sum() > 0

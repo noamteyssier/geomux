@@ -21,12 +21,15 @@ dependencies = [
 geomux = "geomux.__main__:main"
 
 [tool.uv]
-dev-dependencies = [
+package = true
+
+[dependency-groups]
+dev = [
     "pytest>=8.3.3",
     "muxsim>=0.1.0",
     "marimo>=0.14.17",
     "ruff>=0.12.9",
     "pyarrow>=21.0.0",
     "joblib>=1.5.2",
+    "ty>=0.0.89",
 ]
-package = true
