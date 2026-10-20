@@ -13,12 +13,10 @@ def assignment_statistics(assignments: pl.DataFrame) -> dict:
         results["n_untested"] = assignments.filter(pl.col("tested").not_()).height
         results["n_tested"] = assignments.filter(pl.col("tested")).height
         results["n_assigned"] = assignments.filter(
-            pl.col("tested"),
-            (pl.col("moi") > 0)
+            pl.col("tested"), (pl.col("moi") > 0)
         ).height
         results["n_unassigned"] = assignments.filter(
-            pl.col("tested"),
-            (pl.col("moi") == 0)
+            pl.col("tested"), (pl.col("moi") == 0)
         ).height
         mois, moi_counts = np.unique(
             assignments.filter((pl.col("tested")) & (pl.col("moi") > 0))[
