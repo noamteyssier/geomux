@@ -41,7 +41,7 @@ def assignment_statistics(assignments: pl.DataFrame) -> dict:
         return results
 
     results["dominant_moi"] = int(mois[np.argmax(moi_counts)])
-    results["mois"] = list([int(x) for x in mois])
-    results["moi_counts"] = list([int(x) for x in moi_counts])
+    results["mois"] = [int(x) for x in mois]
+    results["moi_counts"] = [int(x) for x in moi_counts]
 
     return results
